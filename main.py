@@ -34,6 +34,8 @@ def on_startup():
     create_db_and_tables()
 
 
+
+
 @app.post("/heroes/")
 def create_hero(hero: Hero):
     with Session(engine) as session:
