@@ -7,5 +7,7 @@ dependencies = [
     "logfire[fastapi]==4.37.0",
 ]
 
-[tool.fastapi]
-entrypoint = "main:app"
+#[tool.fastapi]
+#entrypoint = "main:app"
+[tool.uv]
+package = false
