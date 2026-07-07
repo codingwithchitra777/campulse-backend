@@ -1,24 +1,18 @@
 import os
 
-import logfire # Trigger redeploy test 2
 from fastapi import FastAPI
+
+import logfire
+
 
 app = FastAPI()
 
-token = os.getenv("LOGFIRE_TOKEN")
+# FastAPI Cloud injects this when the Logfire integration is connected.
+logfire.configure(token=os.environ["LOGFIRE_TOKEN"])
+logfire.instrument_fastapi(app)
 
-if token:
-    logfire.configure(token=token)
-    logfire.instrument_fastapi(app)
-else:
-    print("LOGFIRE_TOKEN not configured.")
-
-@app.get("/")
-async def root():
-    logfire.info("Root endpoint called")
-    return {"Hello": "World"}
 
 @app.get("/hello")
 async def hello(name: str = "world"):
-    logfire.info("Hello endpoint", name=name)
+    logfire.info("Saying hello", name=name)
     return {"message": f"hello {name}"}
