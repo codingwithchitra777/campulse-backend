@@ -8,6 +8,8 @@ import os
 import sys
 from contextvars import ContextVar
 
+import logfire
+
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
 
 
@@ -60,6 +62,16 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
+
+    # logfire.configure() only sends what's explicitly sent through its own
+    # SDK (e.g. spans from instrument_fastapi) - stdlib `logging` calls need
+    # this handler too, or they never reach Logfire (FastAPI Cloud's Runtime
+    # Logs view reads from Logfire, not raw stdout).
+    try:
+        root.addHandler(logfire.LogfireLoggingHandler())
+    except Exception:
+        pass
+
     root.setLevel(level)
 
     # Route uvicorn's loggers through the same handler instead of letting
