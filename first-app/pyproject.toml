@@ -4,6 +4,7 @@ version = "1.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi[standard]==0.111.0",
+    "logfire[fastapi]==4.37.0",
 ]
 
 [tool.fastapi]
