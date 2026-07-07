@@ -1,7 +1,6 @@
 import os
 import sys
 import logging
-import threading
 import asyncio
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -9,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from telegram import Update
 from dotenv import load_dotenv
 
 import logfire
@@ -19,12 +17,10 @@ load_dotenv()
 from app.core.logging_config import configure_logging
 
 # Configure logging before any other app import, so a crash during those
-# imports (e.g. app.services.bot, app.api.v1.api) still gets logged instead
-# of failing completely silently.
+# imports still gets logged instead of failing completely silently.
 configure_logging()
 
 from app.core.middleware import RequestLoggingMiddleware
-from app.services.bot import CsxTradingBot
 from app.api.v1.api import api_router
 
 logger = logging.getLogger(__name__)
@@ -35,42 +31,8 @@ async def lifespan(app: FastAPI):
     # reconfigured logging after server startup and won the race against
     # the import-time configure_logging() call in main.py.
     configure_logging()
-    logger.info("startup: launching telegram bot thread")
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
-    bot_thread.start()
     yield
     logger.info("shutdown: fastapi app stopping")
-
-def run_telegram_bot():
-    logger.info("Starting Telegram Bot thread...")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    bot_controller = CsxTradingBot()
-    application = bot_controller.build_app()
-    
-    async def start_polling():
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-        logger.info("Telegram Bot polling active.")
-        while True:
-            await asyncio.sleep(3600)
-            
-    try:
-        loop.run_until_complete(start_polling())
-    except asyncio.CancelledError:
-        logger.info("Telegram Bot thread cancelled")
-    except Exception as e:
-        logger.error(f"Fatal error in Telegram Bot thread: {e}", exc_info=True)
-    finally:
-        try:
-            loop.run_until_complete(application.stop())
-            loop.run_until_complete(application.shutdown())
-        except Exception:
-            pass
-        loop.close()
-        logger.info("Telegram Bot thread shutdown complete")
 
 
 app = FastAPI(
