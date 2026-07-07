@@ -18,3 +18,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.logfire]
+ignore_no_config = true
+
+[tool.fastapi]
+entrypoint = "app.main:app"
