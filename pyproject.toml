@@ -13,7 +13,6 @@ dependencies = [
     "uvicorn",
     "psycopg2-binary",
     "logfire[fastapi]",
-    "python-telegram-bot[job-queue]",
 ]
 
 [tool.uv]
