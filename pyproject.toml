@@ -1,10 +1,12 @@
 [project]
-name = "hello-world-logfire"
+name = "campulse-backend"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]",
-    "logfire[fastapi]",
+    "logfire[fastapi,sqlalchemy]",
+    "sqlmodel",
+    "psycopg2-binary",
 ]
 
 [tool.uv]
