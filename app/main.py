@@ -40,7 +40,7 @@ def run_telegram_bot():
         bot = CsxTradingBot()
         application = bot.build_app()
         logger.info("Starting Telegram Bot polling...")
-        application.run_polling(close_loop=False)
+        application.run_polling(close_loop=False, stop_signals=None)
     except Exception as e:
         logger.error(f"Telegram Bot failed to start: {e}", exc_info=True)
 
