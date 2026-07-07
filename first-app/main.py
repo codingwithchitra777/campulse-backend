@@ -1,19 +1,24 @@
 import os
-from fastapi import FastAPI
+
 import logfire
+from fastapi import FastAPI
 
 app = FastAPI()
 
-# FastAPI Cloud injects this when the Logfire integration is connected.
-logfire.configure(token=os.environ["LOGFIRE_TOKEN"])
-logfire.instrument_fastapi(app)
+token = os.getenv("LOGFIRE_TOKEN")
+
+if token:
+    logfire.configure(token=token)
+    logfire.instrument_fastapi(app)
+else:
+    print("LOGFIRE_TOKEN not configured.")
 
 @app.get("/")
-async def read_root():
-    logfire.info("Saying hello from first-app")
+async def root():
+    logfire.info("Root endpoint called")
     return {"Hello": "World"}
 
 @app.get("/hello")
 async def hello(name: str = "world"):
-    logfire.info("Saying hello", name=name)
+    logfire.info("Hello endpoint", name=name)
     return {"message": f"hello {name}"}
