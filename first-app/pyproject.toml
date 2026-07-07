@@ -1,0 +1,10 @@
+[project]
+name = "first-app"
+version = "1.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi[standard]==0.111.0",
+]
+
+[tool.fastapi]
+entrypoint = "main:app"
