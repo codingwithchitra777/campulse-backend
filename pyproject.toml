@@ -4,8 +4,14 @@ version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "python-dotenv",
+    "requests",
+    "cachetools",
+    "pydantic",
+    "matplotlib",
+    "pytz",
     "fastapi[standard]",
     "uvicorn",
+    "psycopg2-binary",
     "logfire[fastapi]",
 ]
 
