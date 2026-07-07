@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.schemas.auth import GoogleAuthRequest
 from app.repositories.user import UserRepository
 from app.api.deps import get_user_repo
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,7 +22,7 @@ def auth_google(payload: GoogleAuthRequest, user_repo = Depends(get_user_repo)):
         token_data = response.json()
         
         # Verify audience matches our Client ID
-        expected_client_id = "1048965896991-dirq98278c5cj312k2o0kq3f307e2krf.apps.googleusercontent.com"
+        expected_client_id = settings.google_client_id
         if token_data.get("aud") != expected_client_id:
             raise HTTPException(status_code=400, detail="Token audience mismatch")
             
