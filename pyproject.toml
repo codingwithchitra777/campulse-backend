@@ -1,12 +1,20 @@
 [project]
 name = "campulse-backend"
-version = "0.1.0"
+version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi[standard]",
-    "logfire[fastapi,sqlalchemy]",
-    "sqlmodel",
-    "psycopg2-binary",
+    "python-dotenv==1.0.1",
+    "requests==2.32.3",
+    "cachetools==5.5.0",
+    "python-telegram-bot[job-queue]==21.6",
+    "pydantic==2.8.2",
+    "matplotlib==3.8.4",
+    "pytz==2024.1",
+    "aiohttp==3.9.1",
+    "fastapi[standard]==0.111.0",
+    "uvicorn==0.30.1",
+    "psycopg2-binary==2.9.9",
+    "logfire[fastapi]==4.37.0",
 ]
 
 [tool.uv]
