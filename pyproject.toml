@@ -23,4 +23,4 @@ package = false
 ignore_no_config = true
 
 [tool.fastapi]
-entrypoint = "app.main:app"
+entrypoint = "main:app"
