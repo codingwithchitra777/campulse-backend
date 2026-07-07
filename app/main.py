@@ -17,6 +17,12 @@ import logfire
 load_dotenv()
 
 from app.core.logging_config import configure_logging
+
+# Configure logging before any other app import, so a crash during those
+# imports (e.g. app.services.bot, app.api.v1.api) still gets logged instead
+# of failing completely silently.
+configure_logging()
+
 from app.core.middleware import RequestLoggingMiddleware
 from app.services.bot import CsxTradingBot
 from app.api.v1.api import api_router
@@ -73,8 +79,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), service_name="campulse-backend")
-logfire.instrument_fastapi(app)
+# Never let a Logfire outage/misconfig (bad token, blocked egress, etc.)
+# take the whole app down - stdout logging via configure_logging() above
+# already works independently of this.
+try:
+    logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), service_name="campulse-backend")
+    logfire.instrument_fastapi(app)
+except Exception:
+    logger.exception("logfire setup failed, continuing without it")
 
 # CORS
 app.add_middleware(
