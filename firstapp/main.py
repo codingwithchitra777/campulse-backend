@@ -1,6 +1,6 @@
 import os
 
-import logfire
+import logfire # Trigger redeploy test 2
 from fastapi import FastAPI
 
 app = FastAPI()
