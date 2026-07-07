@@ -25,10 +25,24 @@ if logfire_token:
 from app.core.logging_config import configure_logging
 configure_logging()
 
+import threading
+from app.core.config import settings
+from app.services.bot import CsxTradingBot
 from app.core.middleware import RequestLoggingMiddleware
 from app.api.v1.api import api_router
 
 logger = logging.getLogger(__name__)
+
+def run_telegram_bot():
+    """Runs the Telegram bot event loop in a background thread."""
+    logger.info("Initializing Telegram Bot...")
+    try:
+        bot = CsxTradingBot()
+        application = bot.build_app()
+        logger.info("Starting Telegram Bot polling...")
+        application.run_polling(close_loop=False)
+    except Exception as e:
+        logger.error(f"Telegram Bot failed to start: {e}", exc_info=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +50,15 @@ async def lifespan(app: FastAPI):
     # reconfigured logging after server startup and won the race against
     # the import-time configure_logging() call in main.py.
     configure_logging()
+    
+    # Start Telegram Bot if token is configured
+    if settings.telegram_token:
+        logger.info("Starting background thread for Telegram Bot...")
+        bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
+        bot_thread.start()
+    else:
+        logger.warning("TELEGRAM_BOT_TOKEN not configured. Bot will not start.")
+        
     yield
     logger.info("shutdown: fastapi app stopping")
 
