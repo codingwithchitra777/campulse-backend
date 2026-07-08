@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
 
@@ -81,7 +81,7 @@ class LifoMatcherService:
 
         return allocations_created
 
-    def simulate_sell_lifo(self, user_id: str, ticker: str, price: int, qty: int) -> Dict[str, Any]:
+    def simulate_sell_lifo(self, user_id: str, ticker: str, price: int, qty: int, commission: Optional[int] = None) -> Dict[str, Any]:
         """
         Simulate LIFO matching for a proposed SELL trade and compute simulated P/L.
         Does NOT insert any records into the database.
@@ -125,7 +125,10 @@ class LifoMatcherService:
             }
 
         # Calculate simulated proceeds (net of sell commission)
-        sell_comm = int(price * qty * 0.0047)  # 0.47% commission
+        if commission is not None:
+            sell_comm = commission
+        else:
+            sell_comm = int(price * qty * 0.0047)  # 0.47% commission
         total_proceeds = (qty * price) - sell_comm
         simulated_pnl = int(round(total_proceeds - total_cost_basis))
         

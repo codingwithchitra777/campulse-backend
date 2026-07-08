@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 from datetime import datetime
 
 Side = Literal["BUY", "SELL"]
@@ -9,6 +9,7 @@ class TradeCreate(BaseModel):
     side: Side
     price: int
     qty: int
+    commission: Optional[int] = None
 
 class Trade(BaseModel):
     tradeId: str

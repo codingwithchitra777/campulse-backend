@@ -59,7 +59,10 @@ def add_trade(
         if price <= 0 or qty <= 0:
             raise HTTPException(status_code=400, detail="Price and Quantity must be positive")
 
-        commission = int(price * qty * 0.0047)
+        if trade_req.commission is not None:
+            commission = trade_req.commission
+        else:
+            commission = int(price * qty * 0.0047)
         seq = len(trade_repo.list_trades(x_user_id)) + 1
 
         trade = {
@@ -138,7 +141,7 @@ def init_trade(
 
         # SELL side validation & simulation
         lifo_service = LifoMatcherService(trade_repo, alloc_repo)
-        sim_res = lifo_service.simulate_sell_lifo(x_user_id, ticker, price, qty)
+        sim_res = lifo_service.simulate_sell_lifo(x_user_id, ticker, price, qty, commission=trade_req.commission)
 
         return {
             "success": True,
