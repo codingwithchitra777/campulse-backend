@@ -8,6 +8,8 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_group_chat_id: str = os.getenv("TELEGRAM_GROUP_CHAT_ID", "")
+    deploy_notify_secret: str = os.getenv("DEPLOY_NOTIFY_SECRET", "")
     firebase_sa_path: str = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
     firebase_credentials_json: str = os.getenv("FIREBASE_CREDENTIALS", "")  # Secret Manager
     firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID", "")
