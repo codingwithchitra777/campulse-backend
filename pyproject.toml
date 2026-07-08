@@ -9,7 +9,7 @@ dependencies = [
     "pydantic",
     "matplotlib",
     "pytz",
-    "fastapi[standard]==0.111.0",
+    "fastapi[standard]",
     "uvicorn",
     "psycopg2-binary",
     "logfire[fastapi]",
