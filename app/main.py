@@ -55,7 +55,10 @@ if logfire_token:
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://campulse.fastapicloud.dev",   # your frontend
+        "http://localhost:4200",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
