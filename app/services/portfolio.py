@@ -92,10 +92,23 @@ class PortfolioService:
 
             unrealised = 0
             avg_cost = None
+            unrealised_pct = 0.0
             if last_price is not None and pos["remainingQty"] > 0:
                 u = self.unrealised_pnl(user_id, ticker, last_price)
                 unrealised = u["unrealisedPnl"]
                 avg_cost = u["avgCost"]
+                if avg_cost and avg_cost > 0:
+                    unrealised_pct = ((last_price - avg_cost) / avg_cost) * 100.0
+
+            # Calculate total bought cost for total PnL % calculation
+            trades = self.trade_repo.list_trades(user_id, ticker)
+            buys = [t for t in trades if t["side"] == "BUY"]
+            total_bought_cost = sum(int(t["qty"]) * int(t["price"]) for t in buys)
+
+            total_pnl = realised + unrealised
+            total_pnl_pct = 0.0
+            if total_bought_cost > 0:
+                total_pnl_pct = (total_pnl / total_bought_cost) * 100.0
 
             result.append({
                 "ticker": ticker,
@@ -105,7 +118,9 @@ class PortfolioService:
                 "avgCostRemaining": avg_cost,
                 "realisedPnl": realised,
                 "unrealisedPnl": unrealised,
-                "totalPnl": realised + unrealised,
+                "unrealisedPnlPercent": unrealised_pct,
+                "totalPnl": total_pnl,
+                "totalPnlPercent": total_pnl_pct,
             })
         return result
 
