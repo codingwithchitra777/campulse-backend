@@ -18,7 +18,7 @@ class Settings:
     csx_lang: str = os.getenv("CSX_LANG", "en")
     default_user_id: str = os.getenv("DEFAULT_USER_ID", "u001")
     database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/trading_journal")
-    jwt_secret: str = os.getenv("JWT_SECRET", "dev-insecure-secret-change-me-in-production")
+    jwt_secret: str = os.getenv("JWT_SECRET", "")
     jwt_expire_days: int = int(os.getenv("JWT_EXPIRE_DAYS", "30"))
 
     def get_firebase_credentials(self):
