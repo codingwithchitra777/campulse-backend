@@ -44,8 +44,9 @@ class PortfolioService:
                 "orderDate": b["orderDate"],
             })
         
-        # Sort by sequence number descending (newest first) to show LIFO order
-        remaining_lots.sort(key=lambda x: x["seq"], reverse=True)
+        # Cheapest lots first — the order the best-profit matcher consumes
+        # them, so position displays read as the sell queue.
+        remaining_lots.sort(key=lambda x: (x["price"], x["seq"]))
 
         sold_pct = 0.0 if total_bought == 0 else (total_sold / total_bought) * 100.0
 
