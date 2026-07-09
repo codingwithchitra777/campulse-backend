@@ -11,6 +11,12 @@ class TradeCreate(BaseModel):
     qty: int
     commission: Optional[int] = None
 
+class TradeUpdate(BaseModel):
+    ticker: str
+    price: int
+    qty: int
+    commission: Optional[int] = None
+
 class Trade(BaseModel):
     tradeId: str
     userId: str

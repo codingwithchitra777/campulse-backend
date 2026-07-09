@@ -120,6 +120,49 @@ class TradeRepository:
                     cur.execute("SELECT COUNT(*) FROM trades")
                 return cur.fetchone()[0]
 
+    def next_seq(self, user_id: str) -> int:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM trades WHERE user_id = %s", (user_id,))
+                return cur.fetchone()[0]
+
+    def update_trade(
+        self, trade_id: str, user_id: str, ticker: str, price: int, qty: int, commission: int
+    ) -> Optional[Dict[str, Any]]:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE trades SET ticker = %s, price = %s, qty = %s, commission = %s
+                    WHERE trade_id = %s AND user_id = %s
+                    RETURNING trade_id, user_id, seq, ticker, side, price, qty, commission, order_date
+                    """,
+                    (ticker, price, qty, commission, trade_id, user_id)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                     "tradeId": row[0],
+                     "userId": row[1],
+                     "seq": row[2],
+                     "ticker": row[3],
+                     "side": row[4],
+                     "price": row[5],
+                     "qty": row[6],
+                     "commission": row[7],
+                     "orderDate": row[8]
+                }
+
+    def delete_trade(self, trade_id: str, user_id: str) -> bool:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM trades WHERE trade_id = %s AND user_id = %s",
+                    (trade_id, user_id)
+                )
+                return cur.rowcount > 0
+
     def list_trades_by_side(self, user_id: str, ticker: str, side: str) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:

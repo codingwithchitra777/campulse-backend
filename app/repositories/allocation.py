@@ -66,6 +66,15 @@ class AllocationRepository:
                      for r in rows
                 ]
 
+    def has_allocations(self, trade_id: str) -> bool:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT EXISTS(SELECT 1 FROM allocations WHERE buy_trade_id = %s OR sell_trade_id = %s)",
+                    (trade_id, trade_id)
+                )
+                return cur.fetchone()[0]
+
     def get_total_realised_pnl(self) -> float:
         with get_db() as conn:
             with conn.cursor() as cur:

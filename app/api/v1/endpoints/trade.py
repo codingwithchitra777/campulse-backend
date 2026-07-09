@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
-from app.schemas.trade import TradeCreate
+from app.schemas.trade import TradeCreate, TradeUpdate
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.services.lifo_matcher import LifoMatcherService
@@ -73,7 +73,7 @@ def add_trade(
             commission = trade_req.commission
         else:
             commission = int(price * qty * 0.0047)
-        seq = len(trade_repo.list_trades(x_user_id)) + 1
+        seq = trade_repo.next_seq(x_user_id)
 
         trade = {
             "tradeId": str(uuid.uuid4()),
@@ -113,6 +113,64 @@ def add_trade(
         raise
     except Exception as e:
         logger.error(f"Error in add_trade: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/trades/{trade_id}")
+def update_trade(
+    trade_id: str,
+    trade_req: TradeUpdate,
+    current_user = Depends(get_current_user),
+    trade_repo = Depends(get_trade_repo),
+    alloc_repo = Depends(get_alloc_repo)
+):
+    try:
+        trade = trade_repo.get_trade(trade_id)
+        if not trade or trade["userId"] != current_user.user_id:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        if trade["side"] != "BUY":
+            raise HTTPException(status_code=409, detail="Only BUY trades can be edited; delete and re-enter SELL trades instead")
+        if alloc_repo.has_allocations(trade_id):
+            raise HTTPException(status_code=409, detail="Cannot edit a trade that has already been sold from")
+
+        ticker = trade_req.ticker.upper()
+        price = trade_req.price
+        qty = trade_req.qty
+        if price <= 0 or qty <= 0:
+            raise HTTPException(status_code=400, detail="Price and Quantity must be positive")
+        commission = trade_req.commission if trade_req.commission is not None else int(price * qty * 0.0047)
+
+        updated = trade_repo.update_trade(trade_id, current_user.user_id, ticker, price, qty, commission)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        return serialize_trade(updated)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in update_trade: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/trades/{trade_id}")
+def delete_trade(
+    trade_id: str,
+    current_user = Depends(get_current_user),
+    trade_repo = Depends(get_trade_repo),
+    alloc_repo = Depends(get_alloc_repo)
+):
+    try:
+        trade = trade_repo.get_trade(trade_id)
+        if not trade or trade["userId"] != current_user.user_id:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        if trade["side"] == "BUY" and alloc_repo.has_allocations(trade_id):
+            raise HTTPException(status_code=409, detail="Cannot delete a trade that has already been sold from")
+
+        deleted = trade_repo.delete_trade(trade_id, current_user.user_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in delete_trade: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/trades/init")

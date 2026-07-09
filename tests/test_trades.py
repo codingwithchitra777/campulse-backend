@@ -196,3 +196,153 @@ def test_trades_pagination_limit_offset(user_id):
 
     last_page = client.get("/api/trades", headers=auth_headers(user_id), params={"limit": 2, "offset": 4}).json()
     assert len(last_page["items"]) == 1
+
+
+def test_edit_untouched_buy_trade_persists(user_id):
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    trade_id = resp.json()["trade"]["tradeId"]
+
+    patch_resp = client.patch(
+        f"/api/trades/{trade_id}",
+        headers=auth_headers(user_id),
+        json={"ticker": "def", "price": 200, "qty": 20, "commission": 5},
+    )
+    assert patch_resp.status_code == 200
+    updated = patch_resp.json()
+    assert updated["ticker"] == "DEF"
+    assert updated["price"] == 200
+    assert updated["qty"] == 20
+    assert updated["commission"] == 5
+
+    listed = client.get("/api/trades", headers=auth_headers(user_id)).json()["items"]
+    assert listed[0]["ticker"] == "DEF"
+    assert listed[0]["price"] == 200
+
+
+def test_edit_touched_buy_trade_returns_409(user_id):
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    buy_trade_id = client.get("/api/trades", headers=auth_headers(user_id)).json()["items"][0]["tradeId"]
+
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "SELL", "price": 150, "qty": 5},
+    )
+
+    resp = client.patch(
+        f"/api/trades/{buy_trade_id}",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "price": 100, "qty": 10},
+    )
+    assert resp.status_code == 409
+
+
+def test_edit_sell_trade_returns_409(user_id):
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "SELL", "price": 100, "qty": 10},
+    )
+    sell_trade_id = client.get("/api/trades", headers=auth_headers(user_id)).json()["items"][0]["tradeId"]
+
+    resp = client.patch(
+        f"/api/trades/{sell_trade_id}",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "price": 100, "qty": 10},
+    )
+    assert resp.status_code == 409
+
+
+def test_edit_other_users_trade_returns_404(user_id):
+    other_user = f"pytest_{uuid.uuid4().hex[:12]}"
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    trade_id = resp.json()["trade"]["tradeId"]
+
+    patch_resp = client.patch(
+        f"/api/trades/{trade_id}",
+        headers=auth_headers(other_user),
+        json={"ticker": "abc", "price": 100, "qty": 10},
+    )
+    assert patch_resp.status_code == 404
+
+
+def test_delete_untouched_buy_trade(user_id):
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    trade_id = resp.json()["trade"]["tradeId"]
+
+    delete_resp = client.delete(f"/api/trades/{trade_id}", headers=auth_headers(user_id))
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["success"] is True
+
+    listed = client.get("/api/trades", headers=auth_headers(user_id)).json()
+    assert listed["items"] == []
+
+
+def test_delete_touched_buy_trade_returns_409(user_id):
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    buy_trade_id = client.get("/api/trades", headers=auth_headers(user_id)).json()["items"][0]["tradeId"]
+
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "SELL", "price": 150, "qty": 5},
+    )
+
+    resp = client.delete(f"/api/trades/{buy_trade_id}", headers=auth_headers(user_id))
+    assert resp.status_code == 409
+
+
+def test_delete_matched_sell_trade_restores_position_qty(user_id):
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    sell_resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "SELL", "price": 150, "qty": 5},
+    )
+    sell_trade_id = sell_resp.json()["trade"]["tradeId"]
+
+    pos_before = client.get("/api/position/abc", headers=auth_headers(user_id)).json()
+    assert pos_before["remainingQty"] == 5
+
+    delete_resp = client.delete(f"/api/trades/{sell_trade_id}", headers=auth_headers(user_id))
+    assert delete_resp.status_code == 200
+
+    pos_after = client.get("/api/position/abc", headers=auth_headers(user_id)).json()
+    assert pos_after["remainingQty"] == 10
+
+
+def test_delete_other_users_trade_returns_404(user_id):
+    other_user = f"pytest_{uuid.uuid4().hex[:12]}"
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10},
+    )
+    trade_id = resp.json()["trade"]["tradeId"]
+
+    delete_resp = client.delete(f"/api/trades/{trade_id}", headers=auth_headers(other_user))
+    assert delete_resp.status_code == 404
