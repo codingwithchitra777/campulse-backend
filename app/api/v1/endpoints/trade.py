@@ -2,7 +2,7 @@ import uuid
 import logging
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from app.schemas.trade import TradeCreate
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
@@ -32,11 +32,20 @@ def serialize_allocation(a):
 def get_trades(
     current_user = Depends(get_current_user),
     ticker: Optional[str] = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     trade_repo = Depends(get_trade_repo)
 ):
     try:
-        trades = trade_repo.list_trades(current_user.user_id, ticker.upper() if ticker else None)
-        return [serialize_trade(t) for t in trades]
+        trades = trade_repo.list_trades(
+            current_user.user_id, ticker.upper() if ticker else None, limit=limit, offset=offset
+        )
+        return {
+            "items": [serialize_trade(t) for t in trades],
+            "total": trade_repo.count_trades(current_user.user_id),
+            "limit": limit,
+            "offset": offset
+        }
     except Exception as e:
         logger.error(f"Error in get_trades: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

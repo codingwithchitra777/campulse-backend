@@ -28,7 +28,11 @@ def test_health_check():
 def test_get_trades_empty_for_new_user(user_id):
     resp = client.get("/api/trades", headers=auth_headers(user_id))
     assert resp.status_code == 200
-    assert resp.json() == []
+    body = resp.json()
+    assert body["items"] == []
+    assert body["total"] == 0
+    assert body["limit"] == 50
+    assert body["offset"] == 0
 
 
 def test_buy_trade_is_persisted(user_id):
@@ -46,8 +50,9 @@ def test_buy_trade_is_persisted(user_id):
     assert body["realisedPnl"] == 0
 
     listed = client.get("/api/trades", headers=auth_headers(user_id)).json()
-    assert len(listed) == 1
-    assert listed[0]["tradeId"] == body["trade"]["tradeId"]
+    assert listed["total"] == 1
+    assert len(listed["items"]) == 1
+    assert listed["items"][0]["tradeId"] == body["trade"]["tradeId"]
 
 
 def test_sell_lifo_matches_against_buy(user_id):
@@ -150,7 +155,7 @@ def test_trades_scoped_per_user(user_id):
     )
     resp = client.get("/api/trades", headers=auth_headers(other_user))
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.json()["items"] == []
 
 
 def test_ticker_filter(user_id):
@@ -166,5 +171,28 @@ def test_ticker_filter(user_id):
     )
     resp = client.get("/api/trades", headers=auth_headers(user_id), params={"ticker": "abc"})
     assert resp.status_code == 200
-    tickers = {t["ticker"] for t in resp.json()}
+    tickers = {t["ticker"] for t in resp.json()["items"]}
     assert tickers == {"ABC"}
+
+
+def test_trades_pagination_limit_offset(user_id):
+    for i in range(5):
+        client.post(
+            "/api/trades",
+            headers=auth_headers(user_id),
+            json={"ticker": "abc", "side": "BUY", "price": 100 + i, "qty": 1},
+        )
+
+    page1 = client.get("/api/trades", headers=auth_headers(user_id), params={"limit": 2, "offset": 0}).json()
+    assert page1["total"] == 5
+    assert page1["limit"] == 2
+    assert page1["offset"] == 0
+    assert len(page1["items"]) == 2
+
+    page2 = client.get("/api/trades", headers=auth_headers(user_id), params={"limit": 2, "offset": 2}).json()
+    assert page2["total"] == 5
+    assert len(page2["items"]) == 2
+    assert {t["tradeId"] for t in page1["items"]}.isdisjoint({t["tradeId"] for t in page2["items"]})
+
+    last_page = client.get("/api/trades", headers=auth_headers(user_id), params={"limit": 2, "offset": 4}).json()
+    assert len(last_page["items"]) == 1

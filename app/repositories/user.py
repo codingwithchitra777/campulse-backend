@@ -52,10 +52,14 @@ class UserRepository:
                      "role": row[4]
                 }
 
-    def get_all_users(self) -> List[Dict[str, Any]]:
+    def get_all_users(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
-                 cur.execute("SELECT user_id, user_name, register_date, chat_id, role FROM users")
+                 cur.execute(
+                     "SELECT user_id, user_name, register_date, chat_id, role FROM users "
+                     "ORDER BY register_date DESC LIMIT %s OFFSET %s",
+                     (limit, offset)
+                 )
                  rows = cur.fetchall()
                  return [
                      {
@@ -67,3 +71,9 @@ class UserRepository:
                      }
                      for r in rows
                  ]
+
+    def count_users(self) -> int:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM users")
+                return cur.fetchone()[0]

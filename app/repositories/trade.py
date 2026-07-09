@@ -50,7 +50,13 @@ class TradeRepository:
                      "orderDate": row[8]
                 }
 
-    def list_trades(self, user_id: str, ticker: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_trades(
+        self,
+        user_id: str,
+        ticker: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
                 query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date FROM trades WHERE user_id = %s"
@@ -59,6 +65,9 @@ class TradeRepository:
                      query += " AND ticker = %s"
                      params.append(ticker)
                 query += " ORDER BY order_date ASC, seq ASC"
+                if limit is not None:
+                     query += " LIMIT %s OFFSET %s"
+                     params.extend([limit, offset])
                 cur.execute(query, tuple(params))
                 rows = cur.fetchall()
                 return [
@@ -76,15 +85,15 @@ class TradeRepository:
                      for r in rows
                 ]
 
-    def list_all_trades(self, limit: int = 200) -> List[Dict[str, Any]]:
+    def list_all_trades(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
                     SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date
-                    FROM trades ORDER BY order_date DESC LIMIT %s
+                    FROM trades ORDER BY order_date DESC LIMIT %s OFFSET %s
                     """,
-                    (limit,)
+                    (limit, offset)
                 )
                 rows = cur.fetchall()
                 return [
@@ -102,10 +111,13 @@ class TradeRepository:
                      for r in rows
                 ]
 
-    def count_trades(self) -> int:
+    def count_trades(self, user_id: Optional[str] = None) -> int:
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM trades")
+                if user_id:
+                    cur.execute("SELECT COUNT(*) FROM trades WHERE user_id = %s", (user_id,))
+                else:
+                    cur.execute("SELECT COUNT(*) FROM trades")
                 return cur.fetchone()[0]
 
     def list_trades_by_side(self, user_id: str, ticker: str, side: str) -> List[Dict[str, Any]]:

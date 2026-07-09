@@ -42,16 +42,35 @@ def test_admin_routes_reject_normal_user(user_id):
 
 def test_admin_can_list_users_trades_stats(admin_id):
     headers = auth_headers(admin_id, role="admin")
-    assert client.get("/api/admin/users", headers=headers).status_code == 200
+
+    users_resp = client.get("/api/admin/users", headers=headers)
+    assert users_resp.status_code == 200
+    users_body = users_resp.json()
+    assert set(users_body.keys()) == {"items", "total", "limit", "offset"}
+    assert isinstance(users_body["items"], list)
+    assert users_body["total"] >= len(users_body["items"])
 
     trades_resp = client.get("/api/admin/trades", headers=headers)
     assert trades_resp.status_code == 200
-    assert isinstance(trades_resp.json(), list)
+    trades_body = trades_resp.json()
+    assert set(trades_body.keys()) == {"items", "total", "limit", "offset"}
+    assert isinstance(trades_body["items"], list)
 
     stats_resp = client.get("/api/admin/stats", headers=headers)
     assert stats_resp.status_code == 200
     stats = stats_resp.json()
     assert set(stats.keys()) == {"totalUsers", "totalTrades", "totalRealisedPnl"}
+
+
+def test_admin_users_pagination_limit_offset(admin_id):
+    headers = auth_headers(admin_id, role="admin")
+    page1 = client.get("/api/admin/users", headers=headers, params={"limit": 1, "offset": 0}).json()
+    assert len(page1["items"]) == 1
+    assert page1["total"] >= 1
+
+    page2 = client.get("/api/admin/users", headers=headers, params={"limit": 1, "offset": 1}).json()
+    assert len(page2["items"]) == 1
+    assert page1["items"][0]["userId"] != page2["items"][0]["userId"]
 
 
 def test_admin_can_promote_and_demote_other_user(admin_id, other_user_id):
@@ -66,8 +85,8 @@ def test_admin_can_promote_and_demote_other_user(admin_id, other_user_id):
     assert promote_resp.status_code == 200
     assert promote_resp.json()["role"] == "admin"
 
-    users = client.get("/api/admin/users", headers=admin_headers).json()
-    target = next(u for u in users if u["userId"] == other_user_id)
+    users = client.get("/api/admin/users", headers=admin_headers, params={"limit": 200}).json()
+    target = next(u for u in users["items"] if u["userId"] == other_user_id)
     assert target["role"] == "admin"
 
     demote_resp = client.patch(

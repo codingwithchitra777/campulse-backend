@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import get_user_repo, get_trade_repo, get_alloc_repo, get_current_user, require_admin
 from app.schemas.admin import RoleUpdateRequest, AdminStats
 
@@ -18,9 +18,15 @@ def serialize_trade(t):
 
 
 @router.get("/admin/users")
-def list_users(_admin = Depends(require_admin), user_repo = Depends(get_user_repo)):
+def list_users(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _admin = Depends(require_admin),
+    user_repo = Depends(get_user_repo)
+):
     try:
-        return user_repo.get_all_users()
+        items = user_repo.get_all_users(limit=limit, offset=offset)
+        return {"items": items, "total": user_repo.count_users(), "limit": limit, "offset": offset}
     except Exception as e:
         logger.error(f"Error in list_users: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -49,10 +55,20 @@ def update_user_role(
 
 
 @router.get("/admin/trades")
-def list_all_trades(_admin = Depends(require_admin), trade_repo = Depends(get_trade_repo)):
+def list_all_trades(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _admin = Depends(require_admin),
+    trade_repo = Depends(get_trade_repo)
+):
     try:
-        trades = trade_repo.list_all_trades()
-        return [serialize_trade(t) for t in trades]
+        trades = trade_repo.list_all_trades(limit=limit, offset=offset)
+        return {
+            "items": [serialize_trade(t) for t in trades],
+            "total": trade_repo.count_trades(),
+            "limit": limit,
+            "offset": offset
+        }
     except Exception as e:
         logger.error(f"Error in list_all_trades: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -67,7 +83,7 @@ def get_admin_stats(
 ):
     try:
         return AdminStats(
-            totalUsers=len(user_repo.get_all_users()),
+            totalUsers=user_repo.count_users(),
             totalTrades=trade_repo.count_trades(),
             totalRealisedPnl=float(alloc_repo.get_total_realised_pnl())
         )
