@@ -68,6 +68,41 @@ def test_sell_lifo_matches_against_buy(user_id):
     assert 0 < body["realisedPnl"] < 50 * (7500 - 7000)
 
 
+def test_sell_matches_cheapest_lot_first_for_best_profit(user_id):
+    # Older cheap lot, then newer expensive lot. Best-profit matching must
+    # consume the CHEAP lot (7000) even though the expensive one is newer —
+    # LIFO would have picked 7300 here.
+    client.post(
+        "/api/trades",
+        headers={"X-User-Id": user_id},
+        json={"ticker": "abc", "side": "BUY", "price": 7000, "qty": 100},
+    )
+    client.post(
+        "/api/trades",
+        headers={"X-User-Id": user_id},
+        json={"ticker": "abc", "side": "BUY", "price": 7300, "qty": 100},
+    )
+    resp = client.post(
+        "/api/trades",
+        headers={"X-User-Id": user_id},
+        json={"ticker": "abc", "side": "SELL", "price": 7500, "qty": 50},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["allocations"]) == 1
+    assert body["allocations"][0]["buyPrice"] == 7000
+
+    # Selling past the cheap lot spills into the expensive one, cheapest first.
+    resp2 = client.post(
+        "/api/trades",
+        headers={"X-User-Id": user_id},
+        json={"ticker": "abc", "side": "SELL", "price": 7500, "qty": 100},
+    )
+    allocs = resp2.json()["allocations"]
+    assert [a["buyPrice"] for a in allocs] == [7000, 7300]
+    assert [a["qtyAllocated"] for a in allocs] == [50, 50]
+
+
 def test_sell_without_matching_buy_warns_instead_of_erroring(user_id):
     resp = client.post(
         "/api/trades",

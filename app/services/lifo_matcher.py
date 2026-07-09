@@ -18,7 +18,8 @@ class LifoMatcherService:
     def match_sell_lifo(self, sell_trade: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Create allocations rows for this SELL trade.
-        Matches with LOWEST PRICE buys first (minimum cost basis).
+        Best-profit matching: consumes the LOWEST PRICE open buy lots first
+        (minimum cost basis => maximum realised P/L per sale).
         Assumes sell_trade already inserted.
         """
         if sell_trade["side"] != "SELL":
@@ -28,9 +29,10 @@ class LifoMatcherService:
         ticker = sell_trade["ticker"]
         sell_qty_remaining = int(sell_trade["qty"])
 
-        # Get BUY trades and reverse to match most recent first (LIFO)
+        # Best-profit matching: cheapest buy lots first; tie-break on the
+        # older lot (lower seq) so results are deterministic.
         buys = self.trade_repo.list_trades_by_side(user_id, ticker, "BUY")
-        buys = list(reversed(buys))  # Match most recent purchases first
+        buys = sorted(buys, key=lambda b: (int(b["price"]), int(b["seq"])))
         allocations_created = []
 
         for buy in buys:
@@ -83,11 +85,12 @@ class LifoMatcherService:
 
     def simulate_sell_lifo(self, user_id: str, ticker: str, price: int, qty: int, commission: Optional[int] = None) -> Dict[str, Any]:
         """
-        Simulate LIFO matching for a proposed SELL trade and compute simulated P/L.
+        Simulate best-profit matching for a proposed SELL trade and compute
+        simulated P/L. Must mirror match_sell_lifo's lot ordering exactly.
         Does NOT insert any records into the database.
         """
         buys = self.trade_repo.list_trades_by_side(user_id, ticker, "BUY")
-        buys = list(reversed(buys))  # Match most recent purchases first
+        buys = sorted(buys, key=lambda b: (int(b["price"]), int(b["seq"])))
         
         # Calculate open qty for each buy lot
         allocs = self.alloc_repo.list_allocations(user_id, ticker)
