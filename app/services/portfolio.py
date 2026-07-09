@@ -148,6 +148,46 @@ class PortfolioService:
             y["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
         return out
 
+    def chart_timeline(self, user_id: str) -> Dict[str, Any]:
+        """Per-day cumulative series for the Reports charts: money invested vs
+        recovered (from the trade ledger) and running realized P/L (allocations
+        keyed to the SELL trade's order date, like realised_pnl_by_year)."""
+        trades = self.trade_repo.list_trades(user_id)
+
+        investment: List[Dict[str, Any]] = []
+        invested = 0
+        recovered = 0
+        for t in trades:
+            if t["side"] == "BUY":
+                invested += int(t["price"]) * int(t["qty"]) + int(t.get("commission", 0))
+            else:
+                recovered += int(t["price"]) * int(t["qty"]) - int(t.get("commission", 0))
+            day = t["orderDate"].date().isoformat()
+            if investment and investment[-1]["date"] == day:
+                investment[-1]["invested"] = invested
+                investment[-1]["recovered"] = recovered
+            else:
+                investment.append({"date": day, "invested": invested, "recovered": recovered})
+
+        order_date_by_trade = {t["tradeId"]: t["orderDate"] for t in trades}
+        allocs = self.alloc_repo.list_allocations(user_id)
+        events = sorted(
+            (order_date_by_trade.get(a["sellTradeId"], a["createdAt"]), int(a["realisedPnl"]))
+            for a in allocs
+        )
+
+        pnl: List[Dict[str, Any]] = []
+        cumulative = 0
+        for when, realised in events:
+            cumulative += realised
+            day = when.date().isoformat()
+            if pnl and pnl[-1]["date"] == day:
+                pnl[-1]["cumulativePnl"] = cumulative
+            else:
+                pnl.append({"date": day, "cumulativePnl": cumulative})
+
+        return {"investment": investment, "pnl": pnl}
+
     def top_profitable_tickers(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         allocs = self.alloc_repo.list_allocations(user_id)
         pnl_by_ticker = defaultdict(int)

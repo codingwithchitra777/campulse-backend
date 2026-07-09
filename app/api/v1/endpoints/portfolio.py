@@ -110,6 +110,17 @@ def get_pnl_yearly(
         logger.error(f"Error in get_pnl_yearly: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/charts/timeline")
+def get_charts_timeline(
+    current_user = Depends(get_current_user),
+    portfolio_service = Depends(get_portfolio_service)
+):
+    try:
+        return portfolio_service.chart_timeline(current_user.user_id)
+    except Exception as e:
+        logger.error(f"Error in get_charts_timeline: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/top-orders")
 def get_top_orders(
     current_user = Depends(get_current_user),
