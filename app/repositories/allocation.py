@@ -66,6 +66,12 @@ class AllocationRepository:
                      for r in rows
                 ]
 
+    def get_total_realised_pnl(self) -> float:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COALESCE(SUM(realised_pnl), 0) FROM allocations")
+                return cur.fetchone()[0]
+
     def list_allocations_for_buy(self, user_id: str, buy_trade_id: str) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:

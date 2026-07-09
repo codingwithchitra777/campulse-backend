@@ -76,6 +76,38 @@ class TradeRepository:
                      for r in rows
                 ]
 
+    def list_all_trades(self, limit: int = 200) -> List[Dict[str, Any]]:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date
+                    FROM trades ORDER BY order_date DESC LIMIT %s
+                    """,
+                    (limit,)
+                )
+                rows = cur.fetchall()
+                return [
+                     {
+                         "tradeId": r[0],
+                         "userId": r[1],
+                         "seq": r[2],
+                         "ticker": r[3],
+                         "side": r[4],
+                         "price": r[5],
+                         "qty": r[6],
+                         "commission": r[7],
+                         "orderDate": r[8]
+                     }
+                     for r in rows
+                ]
+
+    def count_trades(self) -> int:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM trades")
+                return cur.fetchone()[0]
+
     def list_trades_by_side(self, user_id: str, ticker: str, side: str) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:

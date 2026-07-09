@@ -31,6 +31,27 @@ class UserRepository:
                      "role": row[4]
                 }
 
+    def update_role(self, user_id: str, role: str) -> Optional[Dict[str, Any]]:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE users SET role = %s WHERE user_id = %s
+                    RETURNING user_id, user_name, register_date, chat_id, role
+                    """,
+                    (role, user_id)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                     "userId": row[0],
+                     "userName": row[1],
+                     "registerDate": row[2],
+                     "chat_id": row[3],
+                     "role": row[4]
+                }
+
     def get_all_users(self) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
