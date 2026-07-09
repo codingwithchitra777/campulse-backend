@@ -1,24 +1,25 @@
 import logging
 from datetime import datetime
 from collections import defaultdict
-from fastapi import APIRouter, Header, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from app.services.portfolio import PortfolioService
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
-from app.api.deps import get_portfolio_service, get_trade_repo, get_alloc_repo
+from app.api.deps import get_portfolio_service, get_trade_repo, get_alloc_repo, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/position/{symbol}")
 def get_position(
-    symbol: str, 
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    symbol: str,
+    current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service),
     trade_repo = Depends(get_trade_repo),
     alloc_repo = Depends(get_alloc_repo)
 ):
     try:
+        x_user_id = current_user.user_id
         pos = portfolio_service.position_detail(x_user_id, symbol.upper())
         trades = trade_repo.list_trades(x_user_id, symbol.upper())
         
@@ -89,33 +90,33 @@ def get_position(
 
 @router.get("/portfolio")
 def get_portfolio(
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service)
 ):
     try:
-        return portfolio_service.portfolio(x_user_id)
+        return portfolio_service.portfolio(current_user.user_id)
     except Exception as e:
         logger.error(f"Error in get_portfolio: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/top-orders")
 def get_top_orders(
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service)
 ):
     try:
-        return portfolio_service.top_profitable_buy_orders(x_user_id)
+        return portfolio_service.top_profitable_buy_orders(current_user.user_id)
     except Exception as e:
         logger.error(f"Error in get_top_orders: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/top-tickers")
 def get_top_tickers(
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service)
 ):
     try:
-        return portfolio_service.top_profitable_tickers(x_user_id)
+        return portfolio_service.top_profitable_tickers(current_user.user_id)
     except Exception as e:
         logger.error(f"Error in get_top_tickers: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

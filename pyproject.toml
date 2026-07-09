@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn",
     "psycopg2-binary",
     "logfire[fastapi]",
+    "pyjwt",
 ]
 
 [tool.uv]

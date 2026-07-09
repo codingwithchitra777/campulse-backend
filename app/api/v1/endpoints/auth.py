@@ -1,10 +1,11 @@
 import logging
 import requests
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.auth import GoogleAuthRequest
+from app.schemas.auth import GoogleAuthRequest, DemoAuthRequest
 from app.repositories.user import UserRepository
 from app.api.deps import get_user_repo
 from app.core.config import settings
+from app.core.security import create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,15 +36,39 @@ def auth_google(payload: GoogleAuthRequest, user_repo = Depends(get_user_repo)):
             
         # Create or update user in our database
         user_repo.upsert_user(user_id=google_id, user_name=name)
-        
+        user = user_repo.get_user(google_id)
+        token = create_access_token(user_id=google_id, role=user["role"])
+
         return {
             "success": True,
+            "token": token,
             "userId": google_id,
             "userName": name,
-            "email": email
+            "email": email,
+            "role": user["role"]
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error in google auth: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/auth/demo")
+def auth_demo(payload: DemoAuthRequest, user_repo = Depends(get_user_repo)):
+    try:
+        user_repo.upsert_user(user_id=payload.userId, user_name=payload.userName)
+        user = user_repo.get_user(payload.userId)
+        token = create_access_token(user_id=payload.userId, role=user["role"])
+
+        return {
+            "success": True,
+            "token": token,
+            "userId": payload.userId,
+            "userName": payload.userName,
+            "email": None,
+            "role": user["role"]
+        }
+    except Exception as e:
+        logger.error(f"Error in demo auth: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -2,12 +2,12 @@ import uuid
 import logging
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Header, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from app.schemas.trade import TradeCreate
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.services.lifo_matcher import LifoMatcherService
-from app.api.deps import get_trade_repo, get_alloc_repo, get_portfolio_service
+from app.api.deps import get_trade_repo, get_alloc_repo, get_portfolio_service, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,12 +30,12 @@ def serialize_allocation(a):
 
 @router.get("/trades")
 def get_trades(
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     ticker: Optional[str] = None,
     trade_repo = Depends(get_trade_repo)
 ):
     try:
-        trades = trade_repo.list_trades(x_user_id, ticker.upper() if ticker else None)
+        trades = trade_repo.list_trades(current_user.user_id, ticker.upper() if ticker else None)
         return [serialize_trade(t) for t in trades]
     except Exception as e:
         logger.error(f"Error in get_trades: {e}", exc_info=True)
@@ -44,11 +44,12 @@ def get_trades(
 @router.post("/trades")
 def add_trade(
     trade_req: TradeCreate,
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     trade_repo = Depends(get_trade_repo),
     alloc_repo = Depends(get_alloc_repo)
 ):
     try:
+        x_user_id = current_user.user_id
         ticker = trade_req.ticker.upper()
         side = trade_req.side.upper()
         price = trade_req.price
@@ -108,12 +109,13 @@ def add_trade(
 @router.post("/trades/init")
 def init_trade(
     trade_req: TradeCreate,
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     trade_repo = Depends(get_trade_repo),
     alloc_repo = Depends(get_alloc_repo),
     portfolio_service = Depends(get_portfolio_service)
 ):
     try:
+        x_user_id = current_user.user_id
         ticker = trade_req.ticker.upper()
         side = trade_req.side.upper()
         price = trade_req.price
@@ -161,9 +163,9 @@ def init_trade(
 @router.post("/trades/confirm")
 def confirm_trade(
     trade_req: TradeCreate,
-    x_user_id: str = Header(default="u001", alias="X-User-Id"),
+    current_user = Depends(get_current_user),
     trade_repo = Depends(get_trade_repo),
     alloc_repo = Depends(get_alloc_repo)
 ):
-    return add_trade(trade_req, x_user_id, trade_repo, alloc_repo)
+    return add_trade(trade_req, current_user, trade_repo, alloc_repo)
 

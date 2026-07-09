@@ -62,6 +62,9 @@ def init_db(conn):
                 chat_id BIGINT
             );
         """)
+        cur.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';
+        """)
         # Create trades table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS trades (
