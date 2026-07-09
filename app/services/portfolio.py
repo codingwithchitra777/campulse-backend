@@ -125,6 +125,29 @@ class PortfolioService:
             })
         return result
 
+    def realised_pnl_by_year(self, user_id: str) -> List[Dict[str, Any]]:
+        rows = self.alloc_repo.realised_pnl_by_year(user_id)
+        years: Dict[int, Dict[str, Any]] = {}
+        for r in rows:
+            y = years.setdefault(r["year"], {
+                "year": r["year"],
+                "realisedPnl": 0,
+                "sellCount": 0,
+                "tickers": []
+            })
+            y["realisedPnl"] += r["realisedPnl"]
+            # A sell trade has exactly one ticker, so per-ticker counts sum cleanly.
+            y["sellCount"] += r["sellCount"]
+            y["tickers"].append({
+                "ticker": r["ticker"],
+                "realisedPnl": r["realisedPnl"],
+                "sellCount": r["sellCount"]
+            })
+        out = sorted(years.values(), key=lambda x: x["year"], reverse=True)
+        for y in out:
+            y["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
+        return out
+
     def top_profitable_tickers(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         allocs = self.alloc_repo.list_allocations(user_id)
         pnl_by_ticker = defaultdict(int)

@@ -75,6 +75,36 @@ class AllocationRepository:
                 )
                 return cur.fetchone()[0]
 
+    def realised_pnl_by_year(self, user_id: str) -> List[Dict[str, Any]]:
+        # Grouped on the SELL trade's order_date, not allocations.created_at —
+        # the two coincide for live trades but diverge for backdated data.
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                     """
+                     SELECT EXTRACT(YEAR FROM t.order_date)::INT AS year,
+                            a.ticker,
+                            SUM(a.realised_pnl) AS realised_pnl,
+                            COUNT(DISTINCT a.sell_trade_id) AS sell_count
+                     FROM allocations a
+                     JOIN trades t ON t.trade_id = a.sell_trade_id
+                     WHERE a.user_id = %s
+                     GROUP BY 1, 2
+                     ORDER BY 1 DESC, 3 DESC
+                     """,
+                     (user_id,)
+                )
+                rows = cur.fetchall()
+                return [
+                     {
+                         "year": r[0],
+                         "ticker": r[1],
+                         "realisedPnl": int(r[2]),
+                         "sellCount": int(r[3])
+                     }
+                     for r in rows
+                ]
+
     def get_total_realised_pnl(self) -> float:
         with get_db() as conn:
             with conn.cursor() as cur:
