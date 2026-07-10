@@ -37,12 +37,13 @@ def get_trades(
     trade_repo = Depends(get_trade_repo)
 ):
     try:
+        ticker_filter = ticker.upper() if ticker else None
         trades = trade_repo.list_trades(
-            current_user.user_id, ticker.upper() if ticker else None, limit=limit, offset=offset
+            current_user.user_id, ticker_filter, limit=limit, offset=offset
         )
         return {
             "items": [serialize_trade(t) for t in trades],
-            "total": trade_repo.count_trades(current_user.user_id),
+            "total": trade_repo.count_trades(current_user.user_id, ticker_filter),
             "limit": limit,
             "offset": offset
         }

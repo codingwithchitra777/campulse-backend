@@ -171,8 +171,11 @@ def test_ticker_filter(user_id):
     )
     resp = client.get("/api/trades", headers=auth_headers(user_id), params={"ticker": "abc"})
     assert resp.status_code == 200
-    tickers = {t["ticker"] for t in resp.json()["items"]}
+    body = resp.json()
+    tickers = {t["ticker"] for t in body["items"]}
     assert tickers == {"ABC"}
+    # total must reflect the filter, not the user's overall trade count.
+    assert body["total"] == 1
 
 
 def test_trades_pagination_limit_offset(user_id):
