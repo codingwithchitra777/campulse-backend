@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 from app.db.database import get_db
 
 class TradeRepository:
@@ -127,17 +128,18 @@ class TradeRepository:
                 return cur.fetchone()[0]
 
     def update_trade(
-        self, trade_id: str, user_id: str, ticker: str, price: int, qty: int, commission: int
+        self, trade_id: str, user_id: str, ticker: str, price: int, qty: int, commission: int,
+        order_date: datetime
     ) -> Optional[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    UPDATE trades SET ticker = %s, price = %s, qty = %s, commission = %s
+                    UPDATE trades SET ticker = %s, price = %s, qty = %s, commission = %s, order_date = %s
                     WHERE trade_id = %s AND user_id = %s
                     RETURNING trade_id, user_id, seq, ticker, side, price, qty, commission, order_date
                     """,
-                    (ticker, price, qty, commission, trade_id, user_id)
+                    (ticker, price, qty, commission, order_date, trade_id, user_id)
                 )
                 row = cur.fetchone()
                 if not row:

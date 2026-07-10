@@ -73,6 +73,10 @@ def add_trade(
             commission = trade_req.commission
         else:
             commission = int(price * qty * 0.0047)
+        order_date = trade_req.orderDate or datetime.utcnow()
+        # Allow the rest of "today" so a date-only input for today never rejects.
+        if order_date.date() > datetime.utcnow().date():
+            raise HTTPException(status_code=400, detail="Order date cannot be in the future")
         seq = trade_repo.next_seq(x_user_id)
 
         trade = {
@@ -84,7 +88,7 @@ def add_trade(
             "price": price,
             "qty": qty,
             "commission": commission,
-            "orderDate": datetime.utcnow()
+            "orderDate": order_date
         }
         trade_repo.add_trade(trade)
 
@@ -139,7 +143,12 @@ def update_trade(
             raise HTTPException(status_code=400, detail="Price and Quantity must be positive")
         commission = trade_req.commission if trade_req.commission is not None else int(price * qty * 0.0047)
 
-        updated = trade_repo.update_trade(trade_id, current_user.user_id, ticker, price, qty, commission)
+        # Omitted orderDate keeps the trade's current date (static SQL in the repo).
+        order_date = trade_req.orderDate or trade["orderDate"]
+        if order_date.date() > datetime.utcnow().date():
+            raise HTTPException(status_code=400, detail="Order date cannot be in the future")
+
+        updated = trade_repo.update_trade(trade_id, current_user.user_id, ticker, price, qty, commission, order_date)
         if not updated:
             raise HTTPException(status_code=404, detail="Trade not found")
         return serialize_trade(updated)

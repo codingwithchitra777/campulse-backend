@@ -335,6 +335,77 @@ def test_delete_matched_sell_trade_restores_position_qty(user_id):
     assert pos_after["remainingQty"] == 10
 
 
+def test_backdated_trade_persists_and_flows_to_reports(user_id):
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10,
+              "commission": 0, "orderDate": "2024-03-10"},
+    )
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "SELL", "price": 150, "qty": 10,
+              "commission": 0, "orderDate": "2024-03-12"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["trade"]["orderDate"].startswith("2024-03-12")
+
+    listed = client.get("/api/trades", headers=auth_headers(user_id)).json()["items"]
+    assert {t["orderDate"][:10] for t in listed} == {"2024-03-10", "2024-03-12"}
+
+    # Backdated trades group under their own year in the reports.
+    yearly = client.get("/api/pnl/yearly", headers=auth_headers(user_id)).json()
+    assert [y["year"] for y in yearly] == [2024]
+    assert yearly[0]["realisedPnl"] == 10 * (150 - 100)
+
+    timeline = client.get("/api/charts/timeline", headers=auth_headers(user_id)).json()
+    assert [p["date"] for p in timeline["investment"]] == ["2024-03-10", "2024-03-12"]
+
+
+def test_future_order_date_rejected(user_id):
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10, "orderDate": "2199-01-01"},
+    )
+    assert resp.status_code == 400
+
+
+def test_edit_trade_order_date(user_id):
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10, "orderDate": "2024-05-01"},
+    )
+    trade_id = resp.json()["trade"]["tradeId"]
+
+    patched = client.patch(
+        f"/api/trades/{trade_id}",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "price": 100, "qty": 10, "orderDate": "2023-11-20"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["orderDate"].startswith("2023-11-20")
+
+    # Omitting orderDate leaves the date unchanged.
+    patched2 = client.patch(
+        f"/api/trades/{trade_id}",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "price": 120, "qty": 10},
+    )
+    assert patched2.status_code == 200
+    assert patched2.json()["orderDate"].startswith("2023-11-20")
+    assert patched2.json()["price"] == 120
+
+    future = client.patch(
+        f"/api/trades/{trade_id}",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "price": 100, "qty": 10, "orderDate": "2199-01-01"},
+    )
+    assert future.status_code == 400
+
+
 def test_delete_other_users_trade_returns_404(user_id):
     other_user = f"pytest_{uuid.uuid4().hex[:12]}"
     resp = client.post(
