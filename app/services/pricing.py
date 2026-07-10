@@ -34,8 +34,8 @@ class PriceResult:
 
 class PricingService:
     """
-    CSX endpoint: POST /api/v1/website/market-data/stock/trade-summary
-    Returns current market data for all stocks on a given board.
+    CSX endpoint: GET /api/v1/website/home/main-and-growth-board-stocks-trades
+    Returns current market data for both main and growth board stocks.
     """
     def __init__(self):
         # Cache results for 45 seconds to minimize hitting external API
@@ -59,14 +59,10 @@ class PricingService:
         if not force and cache_key in self.cache:
             data = self.cache[cache_key]
         else:
-            url = f"{settings.csx_base_url}/api/v1/website/market-data/stock/trade-summary"
-            payload = {
-                "board": "all",
-                "fromDate": None
-            }
+            url = f"{settings.csx_base_url}/api/v1/website/home/main-and-growth-board-stocks-trades"
             try:
                 # Fast timeout (3s) to prevent blocking
-                r = requests.post(url, json=payload, timeout=3.0)
+                r = requests.get(url, timeout=3.0)
                 r.raise_for_status()
                 data = r.json()
                 self.cache[cache_key] = data
@@ -76,44 +72,49 @@ class PricingService:
 
         all_stocks = []
         try:
-            auction_data = data.get("data", {}).get("auctionTradingMethod", [])
-            if isinstance(auction_data, list):
-                for stock_data in auction_data:
-                    try:
-                        ticker = stock_data.get("stock", "").upper()
-                        price_str = str(stock_data.get("close", "")).replace(",", "")
-                        price = float(price_str)
-                        
-                        # Extract change info
-                        change = 0
-                        change_val = stock_data.get("change")
-                        if change_val is not None:
-                            if isinstance(change_val, str):
-                                change_val = change_val.replace(",", "").strip()
-                                change = int(float(change_val)) if change_val else 0
-                            else:
-                                change = int(change_val)
-                                
-                        change_direction = stock_data.get("changeUpDown", "equal")
-                        
-                        # Cache the individual PriceResult
-                        latest_key = f"latest:{ticker}"
-                        self.cache[latest_key] = PriceResult(
-                            ticker=ticker,
-                            price=price,
-                            change=change,
-                            change_direction=change_direction,
-                            raw=data
-                        )
-                        
-                        all_stocks.append({
-                            "ticker": ticker,
-                            "price": price,
-                            "change": change,
-                            "change_direction": change_direction
-                        })
-                    except (ValueError, TypeError):
+            data_content = data.get("data", {})
+            main_board = data_content.get("mainBoardStockTrades", []) or []
+            growth_board = data_content.get("growthBoardStockTrades", []) or []
+            combined_data = main_board + growth_board
+
+            for stock_data in combined_data:
+                try:
+                    ticker = stock_data.get("issueName", "").strip().upper()
+                    if not ticker:
                         continue
+                    price_str = str(stock_data.get("currentPrice", "")).replace(",", "")
+                    price = float(price_str)
+                    
+                    # Extract change info
+                    change = 0
+                    change_val = stock_data.get("change")
+                    if change_val is not None:
+                        if isinstance(change_val, str):
+                            change_val = change_val.replace(",", "").strip()
+                            change = int(float(change_val)) if change_val else 0
+                        else:
+                            change = int(change_val)
+                            
+                    change_direction = stock_data.get("changeUpDown", "equal")
+                    
+                    # Cache the individual PriceResult
+                    latest_key = f"latest:{ticker}"
+                    self.cache[latest_key] = PriceResult(
+                        ticker=ticker,
+                        price=price,
+                        change=change,
+                        change_direction=change_direction,
+                        raw=data
+                    )
+                    
+                    all_stocks.append({
+                        "ticker": ticker,
+                        "price": price,
+                        "change": change,
+                        "change_direction": change_direction
+                    })
+                except (ValueError, TypeError):
+                    continue
         except Exception as e:
             logger.error(f"Error parsing CSX API response: {e}")
             
