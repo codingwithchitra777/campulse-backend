@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.repositories.user import UserRepository
+from app.repositories.link import LinkRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.trade_service import record_trade
@@ -70,31 +71,36 @@ class TelegramBotService:
         self.trade_repo = TradeRepository()
         self.alloc_repo = AllocationRepository()
         self.user_repo = UserRepository()
+        self.link_repo = LinkRepository()
         self.pricing = pricing_service_instance
         self.portfolio = PortfolioService(self.trade_repo, self.alloc_repo, self.pricing)
         self.renderer = ChartRenderer(tz_name="Asia/Phnom_Penh")
 
     def dispatch(self, user_id: str, chat_id: int, full_name: str, text: str) -> None:
         command, remainder = CommandParser.split(text)
+        # Data handlers operate on the canonical account, so a linked Telegram id
+        # reads/writes its Google portfolio. /start keeps the raw telegram id — it
+        # owns the telegram user row (chat_id) and consumes link codes.
+        account_id = self.link_repo.get_primary(user_id)
         try:
             if command == "start":
-                self._start(user_id, chat_id, full_name)
+                self._start(user_id, chat_id, full_name, remainder)
             elif command in ("buy", "sell"):
-                self._trade(user_id, chat_id, command.upper(), remainder)
+                self._trade(account_id, chat_id, command.upper(), remainder)
             elif command == "price":
-                self._price(user_id, chat_id, remainder)
+                self._price(account_id, chat_id, remainder)
             elif command == "position":
-                self._position(user_id, chat_id, remainder)
+                self._position(account_id, chat_id, remainder)
             elif command == "stock":
-                self._stock(user_id, chat_id, remainder)
+                self._stock(account_id, chat_id, remainder)
             elif command == "portfolio":
-                self._portfolio(user_id, chat_id)
+                self._portfolio(account_id, chat_id)
             elif command == "show_all":
-                self._show_all(user_id, chat_id)
+                self._show_all(account_id, chat_id)
             elif command == "top_orders":
-                self._top_orders(user_id, chat_id)
+                self._top_orders(account_id, chat_id)
             elif command == "top_tickers":
-                self._top_tickers(user_id, chat_id)
+                self._top_tickers(account_id, chat_id)
             else:
                 self.client.send_message(chat_id, HELP_TEXT)
         except Exception as e:
@@ -103,9 +109,32 @@ class TelegramBotService:
 
     # --- Handlers ---
 
-    def _start(self, user_id: str, chat_id: int, full_name: str) -> None:
+    def _start(self, user_id: str, chat_id: int, full_name: str, remainder: str = "") -> None:
         # The only place chat_id is captured — needed for daily reminders.
         self.user_repo.upsert_user(user_id, full_name or f"User {user_id}", chat_id=chat_id)
+        # `/start <code>` from the web app's "Connect Telegram" deep link: redeem
+        # the one-time code to link this Telegram id to the user's Google account.
+        code = remainder.split()[0] if remainder else ""
+        if code:
+            primary_id = self.link_repo.consume_code(code)
+            if not primary_id:
+                self.client.send_message(chat_id, "⚠️ That link code is invalid or expired. Generate a new one in the web app.")
+                return
+            if primary_id == user_id:
+                self.client.send_message(chat_id, "That code is for this same Telegram account — nothing to link.")
+                return
+            # Don't chain: if others already link to this Telegram id, it's a primary.
+            if self.link_repo.is_primary_of_others(user_id):
+                self.client.send_message(chat_id, "⚠️ This Telegram account is already a primary account and can't be linked as a secondary.")
+                return
+            self.link_repo.migrate_data(user_id, primary_id)
+            self.link_repo.add_link(user_id, primary_id)
+            self.client.send_message(
+                chat_id,
+                "✅ Linked! This Telegram account now shares your web portfolio. "
+                "Your /buy, /sell and reports here go to that account.",
+            )
+            return
         self.client.send_message(chat_id, HELP_TEXT)
 
     def _price(self, user_id: str, chat_id: int, remainder: str) -> None:

@@ -65,6 +65,10 @@ def init_db(conn):
         cur.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';
         """)
+        # Email captured from Google login (Telegram provides none). Nullable.
+        cur.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+        """)
         # Create trades table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS trades (
@@ -96,6 +100,32 @@ def init_db(conn):
                 sell_qty INT NOT NULL,
                 realised_pnl INT NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # Account linking: a login identity (alias, e.g. a Telegram user id) points
+        # at a canonical account (primary, a Google user id). resolve_primary() maps
+        # an alias to its primary at JWT-mint and bot-write time; unlinked ids map to
+        # themselves. Google is the canonical account per the identity model.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_links (
+                alias_user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                primary_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                linked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_links_primary ON user_links(primary_user_id);
+        """)
+        # One-time, short-lived codes minted by a logged-in (primary) account and
+        # redeemed by the Telegram bot's /start <code> deep link to create a link.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS link_codes (
+                code VARCHAR(64) PRIMARY KEY,
+                primary_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP
             );
         """)
 

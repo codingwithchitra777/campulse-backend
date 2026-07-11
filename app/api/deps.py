@@ -4,6 +4,7 @@ from fastapi import Depends, Header, HTTPException, status
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.repositories.user import UserRepository
+from app.repositories.link import LinkRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.core.security import decode_access_token
@@ -42,6 +43,9 @@ def get_alloc_repo() -> AllocationRepository:
 
 def get_user_repo() -> UserRepository:
     return UserRepository()
+
+def get_link_repo() -> LinkRepository:
+    return LinkRepository()
 
 def get_pricing_service():
     return pricing_service_instance
