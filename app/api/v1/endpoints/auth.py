@@ -1,11 +1,30 @@
 import logging
 import requests
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.auth import GoogleAuthRequest, DemoAuthRequest
+from app.schemas.auth import GoogleAuthRequest, DemoAuthRequest, TelegramAuthRequest, TelegramWebAppAuthRequest
 from app.repositories.user import UserRepository
 from app.api.deps import get_user_repo
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, verify_telegram_auth, verify_telegram_webapp_init_data
+
+
+def _telegram_login_response(user_repo, tg_id: int, first_name: str, last_name = None) -> dict:
+    """Shared by the Login Widget and Mini App paths: same user_id convention
+    as the Telegram bot (str(telegram user id)), so bot accounts and web
+    logins are one account."""
+    user_id = str(tg_id)
+    name = first_name + (f" {last_name}" if last_name else "")
+    user_repo.upsert_user(user_id=user_id, user_name=name, chat_id=tg_id)
+    user = user_repo.get_user(user_id)
+    token = create_access_token(user_id=user_id, role=user["role"])
+    return {
+        "success": True,
+        "token": token,
+        "userId": user_id,
+        "userName": name,
+        "email": None,
+        "role": user["role"]
+    }
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,6 +70,35 @@ def auth_google(payload: GoogleAuthRequest, user_repo = Depends(get_user_repo)):
         raise
     except Exception as e:
         logger.error(f"Error in google auth: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/auth/telegram")
+def auth_telegram(payload: TelegramAuthRequest, user_repo = Depends(get_user_repo)):
+    try:
+        if not verify_telegram_auth(payload.model_dump(), settings.telegram_token):
+            raise HTTPException(status_code=401, detail="Invalid Telegram login data")
+        return _telegram_login_response(user_repo, payload.id, payload.first_name, payload.last_name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in telegram auth: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/auth/telegram-webapp")
+def auth_telegram_webapp(payload: TelegramWebAppAuthRequest, user_repo = Depends(get_user_repo)):
+    try:
+        user = verify_telegram_webapp_init_data(payload.initData, settings.telegram_token)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid Telegram Mini App data")
+        return _telegram_login_response(
+            user_repo, int(user["id"]), user.get("first_name", "Telegram User"), user.get("last_name")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in telegram webapp auth: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

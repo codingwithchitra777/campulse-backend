@@ -59,7 +59,7 @@ def test_charts_timeline_requires_auth():
 def test_charts_timeline_empty_for_new_user(user_id):
     resp = client.get("/api/charts/timeline", headers=auth_headers(user_id))
     assert resp.status_code == 200
-    assert resp.json() == {"investment": [], "pnl": []}
+    assert resp.json() == {"investment": [], "pnl": [], "equity": []}
 
 
 def test_charts_timeline_via_api(user_id):
@@ -117,4 +117,4 @@ def test_charts_timeline_scoped_per_user(user_id):
 
     resp = client.get("/api/charts/timeline", headers=auth_headers(other_user))
     assert resp.status_code == 200
-    assert resp.json() == {"investment": [], "pnl": []}
+    assert resp.json() == {"investment": [], "pnl": [], "equity": []}

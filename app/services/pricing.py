@@ -4,11 +4,17 @@ import requests
 import logging
 import threading
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from datetime import datetime
+from typing import Optional, Dict, Any, List
 from cachetools import TTLCache
+import pytz
 from app.core.config import settings
+from app.repositories.price_history import PriceHistoryRepository
 
 logger = logging.getLogger(__name__)
+
+PHNOM_PENH_TZ = pytz.timezone("Asia/Phnom_Penh")
+SNAPSHOT_INTERVAL_SECONDS = 30 * 60
 
 # Standard CSX Stock Ticker Fallbacks (Riel prices)
 FALLBACK_PRICES = {
@@ -40,6 +46,7 @@ class PricingService:
     def __init__(self):
         # Cache results for 45 seconds to minimize hitting external API
         self.cache = TTLCache(maxsize=512, ttl=45)
+        self._last_snapshot_ts = 0.0
         # Start a background daemon thread to periodically refresh prices
         threading.Thread(target=self._background_refresh_loop, daemon=True).start()
 
@@ -48,10 +55,26 @@ class PricingService:
         logger.info("CSX pricing background refresh loop started.")
         while True:
             try:
-                self._fetch_all_prices_from_api(force=True)
+                prices = self._fetch_all_prices_from_api(force=True)
+                # Persist real (never fallback) prices as daily snapshots,
+                # throttled — the upsert makes the day's last write the close.
+                if prices and time.time() - self._last_snapshot_ts >= SNAPSHOT_INTERVAL_SECONDS:
+                    self.snapshot_prices(prices)
+                    self._last_snapshot_ts = time.time()
             except Exception as e:
                 logger.error(f"Error in CSX price pre-fetch: {e}")
             time.sleep(30)
+
+    def snapshot_prices(self, prices: List[dict]) -> None:
+        """Upsert one price_history row per ticker for today's Phnom Penh
+        trading date. DB errors are logged, never propagated to the loop."""
+        snapshot_date = datetime.now(PHNOM_PENH_TZ).date()
+        repo = PriceHistoryRepository()
+        for p in prices:
+            try:
+                repo.upsert_snapshot(p["ticker"], snapshot_date, int(p["price"]))
+            except Exception as e:
+                logger.error(f"Failed to snapshot price for {p.get('ticker')}: {e}")
 
     def _fetch_all_prices_from_api(self, force: bool = False) -> list:
         """Helper to fetch from the CSX API and populate all caches in one go."""

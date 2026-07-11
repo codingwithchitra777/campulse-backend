@@ -4,13 +4,16 @@ from collections import defaultdict
 
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
+from app.repositories.price_history import PriceHistoryRepository
 from app.services.pricing import PricingService
 
 class PortfolioService:
-    def __init__(self, trade_repo: TradeRepository, alloc_repo: AllocationRepository, pricing: PricingService):
+    def __init__(self, trade_repo: TradeRepository, alloc_repo: AllocationRepository, pricing: PricingService,
+                 price_history_repo: Optional[PriceHistoryRepository] = None):
         self.trade_repo = trade_repo
         self.alloc_repo = alloc_repo
         self.pricing = pricing
+        self.price_history = price_history_repo or PriceHistoryRepository()
 
     def _ticker_set(self, user_id: str) -> List[str]:
         trades = self.trade_repo.list_trades(user_id)
@@ -186,7 +189,45 @@ class PortfolioService:
             else:
                 pnl.append({"date": day, "cumulativePnl": cumulative})
 
-        return {"investment": investment, "pnl": pnl}
+        return {"investment": investment, "pnl": pnl, "equity": self._equity_series(trades)}
+
+    def _equity_series(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Market value of open holdings on each snapshotted trading day.
+        Prices forward-fill between snapshots; a ticker with no snapshot yet
+        falls back to its most recent trade price (cost)."""
+        if not trades:
+            return []
+        tickers = sorted({t["ticker"] for t in trades})
+        history = self.price_history.get_history(tickers)
+        if not history:
+            return []
+
+        hist_by_date: Dict[str, Dict[str, int]] = defaultdict(dict)
+        for h in history:
+            hist_by_date[h["date"]][h["ticker"]] = h["price"]
+
+        holdings: Dict[str, int] = defaultdict(int)
+        last_trade_price: Dict[str, int] = {}
+        last_snap_price: Dict[str, int] = {}
+        equity: List[Dict[str, Any]] = []
+        ti = 0
+        for day in sorted(hist_by_date):
+            while ti < len(trades) and trades[ti]["orderDate"].date().isoformat() <= day:
+                t = trades[ti]
+                qty = int(t["qty"])
+                holdings[t["ticker"]] += qty if t["side"] == "BUY" else -qty
+                last_trade_price[t["ticker"]] = int(t["price"])
+                ti += 1
+            last_snap_price.update(hist_by_date[day])
+            if ti == 0:
+                continue  # snapshot predates the first trade
+            value = 0
+            for ticker, qty in holdings.items():
+                if qty <= 0:
+                    continue
+                value += qty * last_snap_price.get(ticker, last_trade_price.get(ticker, 0))
+            equity.append({"date": day, "value": int(value)})
+        return equity
 
     def top_profitable_tickers(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         allocs = self.alloc_repo.list_allocations(user_id)

@@ -98,3 +98,16 @@ def init_db(conn):
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # Daily CSX price snapshots, written by PricingService's refresh thread.
+        # One row per ticker per trading day; the last write of the day wins,
+        # so each row converges on that day's closing price.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS price_history (
+                ticker VARCHAR(50) NOT NULL,
+                snapshot_date DATE NOT NULL,
+                price INT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (ticker, snapshot_date)
+            );
+        """)
