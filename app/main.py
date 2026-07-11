@@ -36,6 +36,9 @@ async def lifespan(app: FastAPI):
     # reconfigured logging after server startup and won the race against
     # the import-time configure_logging() call in main.py.
     configure_logging()
+    # Daily Telegram session reminders (no-op unless TELEGRAM_WEBHOOK_SECRET set).
+    from app.services.reminder_scheduler import start_reminder_scheduler
+    start_reminder_scheduler()
     yield
     logger.info("shutdown: fastapi app stopping")
 

@@ -1,12 +1,10 @@
-import uuid
 import logging
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from app.schemas.trade import TradeCreate, TradeUpdate
-from app.repositories.trade import TradeRepository
-from app.repositories.allocation import AllocationRepository
 from app.services.lifo_matcher import LifoMatcherService
+from app.services.trade_service import record_trade
 from app.api.deps import get_trade_repo, get_alloc_repo, get_portfolio_service, get_current_user
 
 logger = logging.getLogger(__name__)
@@ -59,61 +57,20 @@ def add_trade(
     alloc_repo = Depends(get_alloc_repo)
 ):
     try:
-        x_user_id = current_user.user_id
-        ticker = trade_req.ticker.upper()
-        side = trade_req.side.upper()
-        price = trade_req.price
-        qty = trade_req.qty
-
-        if side not in ["BUY", "SELL"]:
-            raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
-        if price <= 0 or qty <= 0:
-            raise HTTPException(status_code=400, detail="Price and Quantity must be positive")
-
-        if trade_req.commission is not None:
-            commission = trade_req.commission
-        else:
-            commission = int(price * qty * 0.0047)
-        order_date = trade_req.orderDate or datetime.utcnow()
-        # Allow the rest of "today" so a date-only input for today never rejects.
-        if order_date.date() > datetime.utcnow().date():
-            raise HTTPException(status_code=400, detail="Order date cannot be in the future")
-        seq = trade_repo.next_seq(x_user_id)
-
-        trade = {
-            "tradeId": str(uuid.uuid4()),
-            "userId": x_user_id,
-            "seq": seq,
-            "ticker": ticker,
-            "side": side,
-            "price": price,
-            "qty": qty,
-            "commission": commission,
-            "orderDate": order_date
-        }
-        trade_repo.add_trade(trade)
-
-        allocations = []
-        realised_pnl = 0
-        warning = None
-
-        if side == "SELL":
-            lifo_service = LifoMatcherService(trade_repo, alloc_repo)
-            try:
-                allocs = lifo_service.match_sell_lifo(trade)
-                allocations = [serialize_allocation(a) for a in allocs]
-                realised_pnl = sum(int(a.get("realisedPnl", 0)) for a in allocs)
-            except Exception as e:
-                logger.warning(f"LIFO Matching warning: {e}")
-                warning = f"LIFO Match failed: {e}"
-
+        result = record_trade(
+            trade_repo, alloc_repo, current_user.user_id,
+            trade_req.ticker, trade_req.side, trade_req.price, trade_req.qty,
+            commission=trade_req.commission, order_date=trade_req.orderDate,
+        )
         return {
             "success": True,
-            "trade": serialize_trade(trade),
-            "allocations": allocations,
-            "realisedPnl": realised_pnl,
-            "warning": warning
+            "trade": serialize_trade(result["trade"]),
+            "allocations": [serialize_allocation(a) for a in result["allocations"]],
+            "realisedPnl": result["realisedPnl"],
+            "warning": result["warning"]
         }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

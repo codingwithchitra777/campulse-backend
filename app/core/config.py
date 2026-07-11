@@ -9,6 +9,7 @@ load_dotenv()
 class Settings:
     telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_group_chat_id: str = os.getenv("TELEGRAM_GROUP_CHAT_ID", "")
+    telegram_webhook_secret: str = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
     deploy_notify_secret: str = os.getenv("DEPLOY_NOTIFY_SECRET", "")
     firebase_sa_path: str = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
     firebase_credentials_json: str = os.getenv("FIREBASE_CREDENTIALS", "")  # Secret Manager
