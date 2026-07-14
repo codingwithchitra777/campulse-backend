@@ -23,6 +23,14 @@ MARKET_CURRENCY = {
     GOLD_KH: "USD",
 }
 
+# Local Cambodian gold: one instrument, priced by the admin board, traded in
+# *chi* (1 damlong = 10 chi). Quoted in USD per chi by default.
+GOLD_KH_SYMBOL = "XAU-KH"
+GOLD_KH_UNIT = "chi"
+
+# Instruments a manual (admin-set) price provider serves.
+MANUAL_MARKETS = {GOLD_KH}
+
 
 def normalize_market(market):
     m = (market or DEFAULT_MARKET).upper()

@@ -19,7 +19,15 @@
   (94) green. **Live-verify caveat:** real US quotes need `FINNHUB_API_KEY` in the
   backend env — parsing/degradation is unit-tested, but an end-to-end live quote is
   a post-key check.
-- Phases 3–4 — pending (local gold; frontend).
+- **Phase 3 — DONE** (local Cambodian gold, admin-priced). `manual_prices` table +
+  `ManualPriceRepository`; `ManualProvider` registered for `GOLD_KH` in the router;
+  admin `PUT /api/admin/manual-price` (sets the board, snapshots for the equity
+  chart) and `GET /api/admin/manual-prices`. Gold is recorded as a normal trade
+  (`market=GOLD_KH`, `currency=USD`, qty in *chi*, symbol `XAU-KH`) and valued off
+  the board. 6 new tests. The daily gold board is admin-set (no free local-gold API).
+- Phase 4 — pending (frontend: market picker in Record Trade, currency-aware
+  formatting, per-currency portfolio grouping, admin gold-board card; reports
+  grouped by currency).
 
 
 ## Decisions locked in

@@ -184,3 +184,19 @@ def init_db(conn):
                 END IF;
             END $$;
         """)
+
+        # Phase 3 — admin-maintained prices for instruments with no live feed
+        # (local Cambodian gold: no free API, so an admin sets the daily board).
+        # One current row per (market, symbol); the ManualProvider reads it.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS manual_prices (
+                market VARCHAR(16) NOT NULL,
+                symbol VARCHAR(50) NOT NULL,
+                price NUMERIC(20, 4) NOT NULL,
+                currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+                change NUMERIC(20, 4) NOT NULL DEFAULT 0,
+                updated_by VARCHAR(100),
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (market, symbol)
+            );
+        """)
