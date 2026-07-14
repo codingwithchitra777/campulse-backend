@@ -8,6 +8,8 @@ A trade belongs to a *market* and is denominated in a *currency*:
 Everything created before this layer existed is CSX/KHR, which is the default.
 """
 
+from decimal import Decimal, ROUND_HALF_UP
+
 CSX = "CSX"
 US = "US"
 GOLD_KH = "GOLD_KH"
@@ -37,3 +39,21 @@ def resolve_market_currency(market=None, currency=None):
     m = normalize_market(market)
     c = (currency or default_currency(m)).upper()
     return m, c
+
+
+# --- Money precision ------------------------------------------------------
+# How many decimal places each currency's minor unit uses. KHR (riel) is whole;
+# USD has cents. Money is stored as NUMERIC and computed in Decimal, then
+# quantized to the currency's precision so results are exact (no float drift).
+CURRENCY_DP = {"KHR": 0, "USD": 2}
+
+
+def money_precision(currency) -> int:
+    return CURRENCY_DP.get((currency or "KHR").upper(), 2)
+
+
+def quantize_money(value, currency) -> Decimal:
+    """Round a Decimal (or number) to the currency's minor unit, half-up."""
+    dp = money_precision(currency)
+    q = Decimal(1) if dp == 0 else Decimal(1).scaleb(-dp)
+    return Decimal(value).quantize(q, rounding=ROUND_HALF_UP)

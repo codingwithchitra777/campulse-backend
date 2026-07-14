@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from collections import defaultdict
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.services.portfolio import PortfolioService
 from app.repositories.trade import TradeRepository
@@ -13,6 +14,7 @@ router = APIRouter()
 @router.get("/position/{symbol}")
 def get_position(
     symbol: str,
+    market: Optional[str] = None,
     current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service),
     trade_repo = Depends(get_trade_repo),
@@ -20,12 +22,12 @@ def get_position(
 ):
     try:
         x_user_id = current_user.user_id
-        pos = portfolio_service.position_detail(x_user_id, symbol.upper())
-        trades = trade_repo.list_trades(x_user_id, symbol.upper())
-        
+        pos = portfolio_service.position_detail(x_user_id, symbol.upper(), market=market)
+        trades = trade_repo.list_trades(x_user_id, symbol.upper(), market=market)
+
         buys = [t for t in trades if t["side"] == "BUY"]
         sells = [t for t in trades if t["side"] == "SELL"]
-        
+
         # Buys list
         remaining_lots = pos.get("remainingLots", [])
         chart_buys = []
@@ -36,34 +38,34 @@ def get_position(
                 "price": lot["price"],
                 "qtyOpen": lot["qtyOpen"]
             })
-        
+
         # Sells list
-        allocations = alloc_repo.list_allocations(x_user_id, symbol.upper())
+        allocations = alloc_repo.list_allocations(x_user_id, symbol.upper(), market=market)
         allocs_by_sell = defaultdict(list)
         buy_seq_map = {b["tradeId"]: b["seq"] for b in buys}
         for a in allocations:
             allocs_by_sell[a["sellTradeId"]].append({
                 "buySeq": buy_seq_map.get(a["buyTradeId"], "?"),
                 "qty": int(a["qtyAllocated"]),
-                "price": int(a["buyPrice"])
+                "price": float(a["buyPrice"])
             })
-            
+
         chart_sells = []
         for s in sells:
             sell_id = s["tradeId"]
             matched_allocs = allocs_by_sell.get(sell_id, [])
-            pnl = sum(int(a["realisedPnl"]) for a in allocations if a["sellTradeId"] == sell_id)
+            pnl = sum(float(a["realisedPnl"]) for a in allocations if a["sellTradeId"] == sell_id)
             chart_sells.append({
                 "seq": s["seq"],
                 "qty": int(s["qty"]),
-                "price": int(s["price"]),
+                "price": float(s["price"]),
                 "pnl": pnl,
                 "matched": matched_allocs
             })
         chart_sells.sort(key=lambda x: x["seq"], reverse=True)
-        
+
         # Realised P/L
-        realised_pnl = sum(int(a["realisedPnl"]) for a in allocations)
+        realised_pnl = sum(float(a["realisedPnl"]) for a in allocations)
         
         # Format datetime orderDate fields for remainingLots
         serialized_lots = []

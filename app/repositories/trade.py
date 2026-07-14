@@ -60,7 +60,8 @@ class TradeRepository:
         user_id: str,
         ticker: Optional[str] = None,
         limit: Optional[int] = None,
-        offset: int = 0
+        offset: int = 0,
+        market: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -69,6 +70,9 @@ class TradeRepository:
                 if ticker:
                      query += " AND ticker = %s"
                      params.append(ticker)
+                if market:
+                     query += " AND market = %s"
+                     params.append(market)
                 query += " ORDER BY order_date ASC, seq ASC"
                 if limit is not None:
                      query += " LIMIT %s OFFSET %s"
@@ -183,17 +187,19 @@ class TradeRepository:
                 )
                 return cur.rowcount > 0
 
-    def list_trades_by_side(self, user_id: str, ticker: str, side: str) -> List[Dict[str, Any]]:
+    def list_trades_by_side(self, user_id: str, ticker: str, side: str, market: Optional[str] = None) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                     """
+                query = """
                      SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency FROM trades
                      WHERE user_id = %s AND ticker = %s AND side = %s
-                     ORDER BY order_date ASC, seq ASC
-                     """,
-                     (user_id, ticker, side)
-                )
+                     """
+                params = [user_id, ticker, side]
+                if market:
+                     query += " AND market = %s"
+                     params.append(market)
+                query += " ORDER BY order_date ASC, seq ASC"
+                cur.execute(query, tuple(params))
                 rows = cur.fetchall()
                 return [
                      {

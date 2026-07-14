@@ -10,7 +10,16 @@
   Phase 1 would have flipped integer money to floats on the wire with no consumer yet.
   Market-keyed matching (the `ABC` collision fix) also lands in Phase 2 with the first
   non-CSX symbols, since the collision cannot occur while only CSX exists.
-- Phases 2–4 — pending.
+- **Phase 2 — DONE** (Decimal + Finnhub + market-keyed matching). Money columns
+  widened INT→NUMERIC(20,4) (guarded, idempotent); all money handled as `Decimal`
+  and quantized per currency (`markets.quantize_money`, KHR=0dp / USD=2dp).
+  `FinnhubProvider` (US quotes + symbol search) registered in the router;
+  `GET /api/market/search` and `GET /api/market/quote/{symbol}`. Matcher now scopes
+  buy lots by market (fixes the CSX-vs-US `ABC` collision). 8 new tests; full suite
+  (94) green. **Live-verify caveat:** real US quotes need `FINNHUB_API_KEY` in the
+  backend env — parsing/degradation is unit-tested, but an end-to-end live quote is
+  a post-key check.
+- Phases 3–4 — pending (local gold; frontend).
 
 
 ## Decisions locked in

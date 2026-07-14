@@ -152,3 +152,35 @@ def init_db(conn):
         """)
         # Which market a snapshotted symbol belongs to (default CSX for existing rows).
         cur.execute("ALTER TABLE price_history ADD COLUMN IF NOT EXISTS market VARCHAR(16) NOT NULL DEFAULT 'CSX';")
+
+        # Phase 2 — widen money columns from INT to NUMERIC so non-riel markets
+        # (USD cents, fractional gold) keep sub-unit precision. Lossless for the
+        # existing whole-riel data. Guarded on the current type so it runs once.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF (SELECT data_type FROM information_schema.columns
+                    WHERE table_name = 'trades' AND column_name = 'price') = 'integer' THEN
+                    ALTER TABLE trades
+                        ALTER COLUMN price TYPE NUMERIC(20, 4),
+                        ALTER COLUMN qty TYPE NUMERIC(20, 4),
+                        ALTER COLUMN commission TYPE NUMERIC(20, 4);
+                END IF;
+                IF (SELECT data_type FROM information_schema.columns
+                    WHERE table_name = 'allocations' AND column_name = 'buy_price') = 'integer' THEN
+                    ALTER TABLE allocations
+                        ALTER COLUMN qty_allocated TYPE NUMERIC(20, 4),
+                        ALTER COLUMN buy_price TYPE NUMERIC(20, 4),
+                        ALTER COLUMN buy_commission TYPE NUMERIC(20, 4),
+                        ALTER COLUMN buy_qty TYPE NUMERIC(20, 4),
+                        ALTER COLUMN sell_price TYPE NUMERIC(20, 4),
+                        ALTER COLUMN sell_commission TYPE NUMERIC(20, 4),
+                        ALTER COLUMN sell_qty TYPE NUMERIC(20, 4),
+                        ALTER COLUMN realised_pnl TYPE NUMERIC(20, 4);
+                END IF;
+                IF (SELECT data_type FROM information_schema.columns
+                    WHERE table_name = 'price_history' AND column_name = 'price') = 'integer' THEN
+                    ALTER TABLE price_history ALTER COLUMN price TYPE NUMERIC(20, 4);
+                END IF;
+            END $$;
+        """)

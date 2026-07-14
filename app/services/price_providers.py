@@ -48,5 +48,12 @@ class PriceRouter:
         return getter() if getter else []
 
 
-# Single default router (CSX only in Phase 1). Phase 2/3 extend the provider map.
-price_router = PriceRouter({markets.CSX: CSXProvider(pricing_service_instance)})
+# Default router: CSX (native) + US (Finnhub). Phase 3 adds a manual gold provider.
+# FinnhubProvider degrades to price=None when FINNHUB_API_KEY is unset, so this is
+# safe to register unconditionally.
+from app.services.finnhub_provider import FinnhubProvider  # noqa: E402  (avoid import cycle at module top)
+
+price_router = PriceRouter({
+    markets.CSX: CSXProvider(pricing_service_instance),
+    markets.US: FinnhubProvider(),
+})

@@ -7,6 +7,7 @@ from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
+from app.services.price_providers import price_router
 from app.core.security import decode_access_token
 
 
@@ -50,5 +51,9 @@ def get_link_repo() -> LinkRepository:
 def get_pricing_service():
     return pricing_service_instance
 
+def get_price_router():
+    return price_router
+
 def get_portfolio_service() -> PortfolioService:
-    return PortfolioService(TradeRepository(), AllocationRepository(), pricing_service_instance)
+    return PortfolioService(TradeRepository(), AllocationRepository(), pricing_service_instance,
+                            price_router=price_router)

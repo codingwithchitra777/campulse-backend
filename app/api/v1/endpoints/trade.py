@@ -1,10 +1,12 @@
 import logging
+from decimal import Decimal
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from app.schemas.trade import TradeCreate, TradeUpdate
 from app.services.lifo_matcher import LifoMatcherService
 from app.services.trade_service import record_trade
+from app.services.markets import quantize_money
 from app.api.deps import get_trade_repo, get_alloc_repo, get_portfolio_service, get_current_user
 
 logger = logging.getLogger(__name__)
@@ -100,7 +102,8 @@ def update_trade(
         qty = trade_req.qty
         if price <= 0 or qty <= 0:
             raise HTTPException(status_code=400, detail="Price and Quantity must be positive")
-        commission = trade_req.commission if trade_req.commission is not None else int(price * qty * 0.0047)
+        commission = (trade_req.commission if trade_req.commission is not None
+                      else quantize_money(price * qty * Decimal("0.0047"), trade.get("currency", "KHR")))
 
         # Omitted orderDate keeps the trade's current date (static SQL in the repo).
         order_date = trade_req.orderDate or trade["orderDate"]
@@ -162,7 +165,7 @@ def init_trade(
             raise HTTPException(status_code=400, detail="Price and Quantity must be positive")
 
         # Get existing position details
-        pos = portfolio_service.position_detail(x_user_id, ticker)
+        pos = portfolio_service.position_detail(x_user_id, ticker, market=trade_req.market)
         existing_qty = pos["remainingQty"]
 
         if side == "BUY":
@@ -178,7 +181,7 @@ def init_trade(
 
         # SELL side validation & simulation
         lifo_service = LifoMatcherService(trade_repo, alloc_repo)
-        sim_res = lifo_service.simulate_sell_lifo(x_user_id, ticker, price, qty, commission=trade_req.commission)
+        sim_res = lifo_service.simulate_sell_lifo(x_user_id, ticker, price, qty, commission=trade_req.commission, market=trade_req.market)
 
         return {
             "success": True,

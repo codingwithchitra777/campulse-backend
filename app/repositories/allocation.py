@@ -33,7 +33,7 @@ class AllocationRepository:
                      )
                 )
 
-    def list_allocations(self, user_id: str, ticker: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_allocations(self, user_id: str, ticker: Optional[str] = None, market: Optional[str] = None) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
                 query = """
@@ -45,6 +45,9 @@ class AllocationRepository:
                 if ticker:
                      query += " AND ticker = %s"
                      params.append(ticker)
+                if market:
+                     query += " AND market = %s"
+                     params.append(market)
                 query += " ORDER BY created_at ASC"
                 cur.execute(query, tuple(params))
                 rows = cur.fetchall()

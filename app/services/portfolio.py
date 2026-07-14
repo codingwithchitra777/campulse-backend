@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
+from decimal import Decimal
 
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
@@ -25,8 +26,8 @@ class PortfolioService:
         trades = self.trade_repo.list_trades(user_id)
         return sorted({t["ticker"] for t in trades})
 
-    def position_detail(self, user_id: str, ticker: str) -> Dict[str, Any]:
-        trades = self.trade_repo.list_trades(user_id, ticker)
+    def position_detail(self, user_id: str, ticker: str, market: Optional[str] = None) -> Dict[str, Any]:
+        trades = self.trade_repo.list_trades(user_id, ticker, market=market)
         buys = [t for t in trades if t["side"] == "BUY"]
         sells = [t for t in trades if t["side"] == "SELL"]
 
@@ -35,7 +36,7 @@ class PortfolioService:
         remaining = total_bought - total_sold
 
         # Remaining lots (BUY lots minus allocated qty)
-        allocs = self.alloc_repo.list_allocations(user_id, ticker)
+        allocs = self.alloc_repo.list_allocations(user_id, ticker, market=market)
         alloc_by_buy = defaultdict(int)
         for a in allocs:
             alloc_by_buy[a["buyTradeId"]] += int(a["qtyAllocated"])
@@ -46,13 +47,13 @@ class PortfolioService:
             remaining_lots.append({
                 "seq": b["seq"],
                 "tradeId": b["tradeId"],
-                "price": int(b["price"]),
+                "price": Decimal(b["price"]),
                 "qtyOriginal": int(b["qty"]),
                 "qtyOpen": max(0, open_qty),
-                "commission": int(b.get("commission", 0)),
+                "commission": Decimal(b.get("commission", 0) or 0),
                 "orderDate": b["orderDate"],
             })
-        
+
         # Cheapest lots first — the order the best-profit matcher consumes
         # them, so position displays read as the sell queue.
         remaining_lots.sort(key=lambda x: (x["price"], x["seq"]))
@@ -68,26 +69,25 @@ class PortfolioService:
             "remainingLots": remaining_lots,
         }
 
-    def realised_pnl(self, user_id: str, ticker: Optional[str] = None) -> int:
-        allocs = self.alloc_repo.list_allocations(user_id, ticker)
-        return sum(int(a["realisedPnl"]) for a in allocs)
+    def realised_pnl(self, user_id: str, ticker: Optional[str] = None, market: Optional[str] = None) -> Decimal:
+        allocs = self.alloc_repo.list_allocations(user_id, ticker, market=market)
+        return sum((Decimal(a["realisedPnl"]) for a in allocs), Decimal(0))
 
-    def unrealised_pnl(self, user_id: str, ticker: str, current_price: int) -> Dict[str, Any]:
-        pos = self.position_detail(user_id, ticker)
+    def unrealised_pnl(self, user_id: str, ticker: str, current_price, market: Optional[str] = None,
+                       currency: str = "KHR") -> Dict[str, Any]:
+        pos = self.position_detail(user_id, ticker, market=market)
         remaining_lots = pos["remainingLots"]
 
         total_qty = sum(l["qtyOpen"] for l in remaining_lots)
         if total_qty <= 0:
-            return {"ticker": ticker, "remainingQty": 0, "avgCost": None, "unrealisedPnl": 0}
+            return {"ticker": ticker, "remainingQty": 0, "avgCost": None, "unrealisedPnl": Decimal(0)}
 
-        total_cost = 0.0
+        total_cost = Decimal(0)
         for l in remaining_lots:
-            buy_qty = l["qtyOpen"]
-            unit_cost = float(l["price"])
-            total_cost += buy_qty * unit_cost
+            total_cost += Decimal(l["qtyOpen"]) * Decimal(l["price"])
 
-        avg_cost = total_cost / total_qty
-        unrealised = int(round(total_qty * (float(current_price) - avg_cost)))
+        avg_cost = total_cost / Decimal(total_qty)
+        unrealised = markets.quantize_money(Decimal(total_qty) * (Decimal(current_price) - avg_cost), currency)
 
         return {"ticker": ticker, "remainingQty": total_qty, "avgCost": avg_cost, "unrealisedPnl": unrealised}
 
@@ -102,29 +102,29 @@ class PortfolioService:
         for ticker in sorted(meta):
             market, currency = meta[ticker]
             price_res = self.price_router.get_latest_price(market, ticker)
-            last_price = int(price_res.price) if price_res.price is not None else None
+            last_price = Decimal(str(price_res.price)) if price_res.price is not None else None
 
-            pos = self.position_detail(user_id, ticker)
-            realised = self.realised_pnl(user_id, ticker)
+            pos = self.position_detail(user_id, ticker, market=market)
+            realised = self.realised_pnl(user_id, ticker, market=market)
 
-            unrealised = 0
+            unrealised = Decimal(0)
             avg_cost = None
             unrealised_pct = 0.0
             if last_price is not None and pos["remainingQty"] > 0:
-                u = self.unrealised_pnl(user_id, ticker, last_price)
+                u = self.unrealised_pnl(user_id, ticker, last_price, market=market, currency=currency)
                 unrealised = u["unrealisedPnl"]
                 avg_cost = u["avgCost"]
                 if avg_cost and avg_cost > 0:
-                    unrealised_pct = ((last_price - avg_cost) / avg_cost) * 100.0
+                    unrealised_pct = float((last_price - avg_cost) / avg_cost) * 100.0
 
             # Calculate total bought cost for total PnL % calculation
             buys = [t for t in all_trades if t["ticker"] == ticker and t["side"] == "BUY"]
-            total_bought_cost = sum(int(t["qty"]) * int(t["price"]) for t in buys)
+            total_bought_cost = sum((Decimal(t["price"]) * int(t["qty"]) for t in buys), Decimal(0))
 
             total_pnl = realised + unrealised
             total_pnl_pct = 0.0
             if total_bought_cost > 0:
-                total_pnl_pct = (total_pnl / total_bought_cost) * 100.0
+                total_pnl_pct = float(total_pnl) / float(total_bought_cost) * 100.0
 
             result.append({
                 "ticker": ticker,
@@ -230,7 +230,7 @@ class PortfolioService:
                 t = trades[ti]
                 qty = int(t["qty"])
                 holdings[t["ticker"]] += qty if t["side"] == "BUY" else -qty
-                last_trade_price[t["ticker"]] = int(t["price"])
+                last_trade_price[t["ticker"]] = Decimal(t["price"])
                 ti += 1
             last_snap_price.update(hist_by_date[day])
             if ti == 0:
@@ -245,17 +245,17 @@ class PortfolioService:
 
     def top_profitable_tickers(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         allocs = self.alloc_repo.list_allocations(user_id)
-        pnl_by_ticker = defaultdict(int)
+        pnl_by_ticker = defaultdict(lambda: Decimal(0))
         for a in allocs:
-            pnl_by_ticker[a["ticker"]] += int(a["realisedPnl"])
+            pnl_by_ticker[a["ticker"]] += Decimal(a["realisedPnl"])
         ranked = sorted(pnl_by_ticker.items(), key=lambda x: x[1], reverse=True)[:limit]
         return [{"ticker": t, "realisedPnl": p} for t, p in ranked]
 
     def top_profitable_buy_orders(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         allocs = self.alloc_repo.list_allocations(user_id)
-        pnl_by_buy = defaultdict(int)
+        pnl_by_buy = defaultdict(lambda: Decimal(0))
         for a in allocs:
-            pnl_by_buy[a["buyTradeId"]] += int(a["realisedPnl"])
+            pnl_by_buy[a["buyTradeId"]] += Decimal(a["realisedPnl"])
 
         trades = self.trade_repo.list_trades(user_id)
         trade_map = {t["tradeId"]: t for t in trades}

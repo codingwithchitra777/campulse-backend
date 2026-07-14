@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import Literal, Optional
 from datetime import datetime, timezone
+from decimal import Decimal
 
 Side = Literal["BUY", "SELL"]
 
@@ -14,9 +15,11 @@ def _to_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
 class TradeCreate(BaseModel):
     ticker: str
     side: Side
-    price: int
+    # Price/commission are Decimal so USD cents (and fractional gold) survive;
+    # whole-riel CSX values coerce cleanly from JSON integers.
+    price: Decimal
     qty: int
-    commission: Optional[int] = None
+    commission: Optional[Decimal] = None
     orderDate: Optional[datetime] = None
     # Multi-market: omitted defaults to the CSX/riel behaviour (resolved in record_trade).
     market: Optional[str] = None
@@ -26,9 +29,9 @@ class TradeCreate(BaseModel):
 
 class TradeUpdate(BaseModel):
     ticker: str
-    price: int
+    price: Decimal
     qty: int
-    commission: Optional[int] = None
+    commission: Optional[Decimal] = None
     orderDate: Optional[datetime] = None
 
     _normalize_order_date = field_validator("orderDate")(_to_naive_utc)
@@ -39,9 +42,9 @@ class Trade(BaseModel):
     seq: int
     ticker: str
     side: Side
-    price: int
+    price: Decimal
     qty: int
-    commission: int = 0
+    commission: Decimal = Decimal(0)
     orderDate: datetime
     market: str = "CSX"
     currency: str = "KHR"
