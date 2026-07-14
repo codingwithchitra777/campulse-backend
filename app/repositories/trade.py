@@ -13,8 +13,8 @@ class TradeRepository:
                 )
                 cur.execute(
                     """
-                    INSERT INTO trades (trade_id, user_id, seq, ticker, side, price, qty, commission, order_date)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO trades (trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         trade["tradeId"],
@@ -25,7 +25,9 @@ class TradeRepository:
                         trade["price"],
                         trade["qty"],
                         trade["commission"],
-                        trade["orderDate"]
+                        trade["orderDate"],
+                        trade.get("market", "CSX"),
+                        trade.get("currency", "KHR")
                     )
                 )
 
@@ -33,7 +35,7 @@ class TradeRepository:
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date FROM trades WHERE trade_id = %s",
+                    "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency FROM trades WHERE trade_id = %s",
                     (trade_id,)
                 )
                 row = cur.fetchone()
@@ -48,7 +50,9 @@ class TradeRepository:
                      "price": row[5],
                      "qty": row[6],
                      "commission": row[7],
-                     "orderDate": row[8]
+                     "orderDate": row[8],
+                     "market": row[9],
+                     "currency": row[10]
                 }
 
     def list_trades(
@@ -60,7 +64,7 @@ class TradeRepository:
     ) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
-                query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date FROM trades WHERE user_id = %s"
+                query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency FROM trades WHERE user_id = %s"
                 params = [user_id]
                 if ticker:
                      query += " AND ticker = %s"
@@ -81,7 +85,9 @@ class TradeRepository:
                          "price": r[5],
                          "qty": r[6],
                          "commission": r[7],
-                         "orderDate": r[8]
+                         "orderDate": r[8],
+                         "market": r[9],
+                         "currency": r[10]
                      }
                      for r in rows
                 ]
@@ -91,7 +97,7 @@ class TradeRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date
+                    SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency
                     FROM trades ORDER BY order_date DESC LIMIT %s OFFSET %s
                     """,
                     (limit, offset)
@@ -107,7 +113,9 @@ class TradeRepository:
                          "price": r[5],
                          "qty": r[6],
                          "commission": r[7],
-                         "orderDate": r[8]
+                         "orderDate": r[8],
+                         "market": r[9],
+                         "currency": r[10]
                      }
                      for r in rows
                 ]
@@ -145,7 +153,7 @@ class TradeRepository:
                     """
                     UPDATE trades SET ticker = %s, price = %s, qty = %s, commission = %s, order_date = %s
                     WHERE trade_id = %s AND user_id = %s
-                    RETURNING trade_id, user_id, seq, ticker, side, price, qty, commission, order_date
+                    RETURNING trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency
                     """,
                     (ticker, price, qty, commission, order_date, trade_id, user_id)
                 )
@@ -161,7 +169,9 @@ class TradeRepository:
                      "price": row[5],
                      "qty": row[6],
                      "commission": row[7],
-                     "orderDate": row[8]
+                     "orderDate": row[8],
+                     "market": row[9],
+                     "currency": row[10]
                 }
 
     def delete_trade(self, trade_id: str, user_id: str) -> bool:
@@ -178,7 +188,7 @@ class TradeRepository:
             with conn.cursor() as cur:
                 cur.execute(
                      """
-                     SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date FROM trades 
+                     SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency FROM trades
                      WHERE user_id = %s AND ticker = %s AND side = %s
                      ORDER BY order_date ASC, seq ASC
                      """,
@@ -195,7 +205,9 @@ class TradeRepository:
                          "price": r[5],
                          "qty": r[6],
                          "commission": r[7],
-                         "orderDate": r[8]
+                         "orderDate": r[8],
+                         "market": r[9],
+                         "currency": r[10]
                      }
                      for r in rows
                 ]

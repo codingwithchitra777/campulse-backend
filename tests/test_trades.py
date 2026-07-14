@@ -409,6 +409,79 @@ def test_edit_trade_order_date(user_id):
     assert future.status_code == 400
 
 
+def test_trade_defaults_to_csx_market(user_id):
+    """A trade recorded without an explicit market is CSX/KHR (backward compatible)."""
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 7000, "qty": 100},
+    )
+    assert resp.status_code == 200
+    trade = resp.json()["trade"]
+    assert trade["market"] == "CSX"
+    assert trade["currency"] == "KHR"
+
+    listed = client.get("/api/trades", headers=auth_headers(user_id)).json()["items"]
+    assert listed[0]["market"] == "CSX"
+    assert listed[0]["currency"] == "KHR"
+
+
+def test_trade_accepts_explicit_market_and_currency(user_id):
+    """An explicit market/currency is persisted and echoed back."""
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "aapl", "side": "BUY", "price": 172, "qty": 10,
+              "commission": 1, "market": "US", "currency": "USD"},
+    )
+    assert resp.status_code == 200
+    trade = resp.json()["trade"]
+    assert trade["market"] == "US"
+    assert trade["currency"] == "USD"
+
+
+def test_unknown_market_falls_back_to_csx(user_id):
+    """A bogus market normalizes to CSX rather than persisting garbage."""
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 1, "market": "NASDAQ_TYPO"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["trade"]["market"] == "CSX"
+
+
+def test_portfolio_position_exposes_currency(user_id):
+    """Portfolio positions carry market/currency so the UI can group per currency."""
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 7000, "qty": 100},
+    )
+    portfolio = client.get("/api/portfolio", headers=auth_headers(user_id)).json()
+    assert len(portfolio) == 1
+    assert portfolio[0]["ticker"] == "ABC"
+    assert portfolio[0]["market"] == "CSX"
+    assert portfolio[0]["currency"] == "KHR"
+
+
+def test_sell_allocation_inherits_market_currency(user_id):
+    """Allocations created by matching inherit the trade's market/currency."""
+    client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "BUY", "price": 7000, "qty": 100},
+    )
+    resp = client.post(
+        "/api/trades",
+        headers=auth_headers(user_id),
+        json={"ticker": "abc", "side": "SELL", "price": 7500, "qty": 50},
+    )
+    alloc = resp.json()["allocations"][0]
+    assert alloc["market"] == "CSX"
+    assert alloc["currency"] == "KHR"
+
+
 def test_delete_other_users_trade_returns_404(user_id):
     other_user = f"pytest_{uuid.uuid4().hex[:12]}"
     resp = client.post(

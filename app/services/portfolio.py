@@ -6,14 +6,20 @@ from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.repositories.price_history import PriceHistoryRepository
 from app.services.pricing import PricingService
+from app.services.price_providers import PriceRouter, CSXProvider
+from app.services import markets
 
 class PortfolioService:
     def __init__(self, trade_repo: TradeRepository, alloc_repo: AllocationRepository, pricing: PricingService,
-                 price_history_repo: Optional[PriceHistoryRepository] = None):
+                 price_history_repo: Optional[PriceHistoryRepository] = None,
+                 price_router: Optional[PriceRouter] = None):
         self.trade_repo = trade_repo
         self.alloc_repo = alloc_repo
         self.pricing = pricing
         self.price_history = price_history_repo or PriceHistoryRepository()
+        # Market-aware price lookups; defaults to a CSX-only router built from the
+        # injected pricing service, so existing (CSX) callers behave identically.
+        self.price_router = price_router or PriceRouter({markets.CSX: CSXProvider(pricing)})
 
     def _ticker_set(self, user_id: str) -> List[str]:
         trades = self.trade_repo.list_trades(user_id)
@@ -86,9 +92,16 @@ class PortfolioService:
         return {"ticker": ticker, "remainingQty": total_qty, "avgCost": avg_cost, "unrealisedPnl": unrealised}
 
     def portfolio(self, user_id: str) -> List[Dict[str, Any]]:
+        all_trades = self.trade_repo.list_trades(user_id)
+        # First trade of each ticker fixes its market/currency (one ticker == one market).
+        meta: Dict[str, tuple] = {}
+        for t in all_trades:
+            meta.setdefault(t["ticker"], (t.get("market", "CSX"), t.get("currency", "KHR")))
+
         result = []
-        for ticker in self._ticker_set(user_id):
-            price_res = self.pricing.get_latest_price(ticker)
+        for ticker in sorted(meta):
+            market, currency = meta[ticker]
+            price_res = self.price_router.get_latest_price(market, ticker)
             last_price = int(price_res.price) if price_res.price is not None else None
 
             pos = self.position_detail(user_id, ticker)
@@ -105,8 +118,7 @@ class PortfolioService:
                     unrealised_pct = ((last_price - avg_cost) / avg_cost) * 100.0
 
             # Calculate total bought cost for total PnL % calculation
-            trades = self.trade_repo.list_trades(user_id, ticker)
-            buys = [t for t in trades if t["side"] == "BUY"]
+            buys = [t for t in all_trades if t["ticker"] == ticker and t["side"] == "BUY"]
             total_bought_cost = sum(int(t["qty"]) * int(t["price"]) for t in buys)
 
             total_pnl = realised + unrealised
@@ -116,6 +128,8 @@ class PortfolioService:
 
             result.append({
                 "ticker": ticker,
+                "market": market,
+                "currency": currency,
                 "lastPrice": last_price,
                 "remainingQty": pos["remainingQty"],
                 "soldPercent": pos["soldPercent"],

@@ -3,16 +3,16 @@ from typing import List, Dict, Any
 from app.db.database import get_db
 
 class PriceHistoryRepository:
-    def upsert_snapshot(self, ticker: str, snapshot_date: date, price: int) -> None:
+    def upsert_snapshot(self, ticker: str, snapshot_date: date, price: int, market: str = "CSX") -> None:
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO price_history (ticker, snapshot_date, price)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (ticker, snapshot_date) DO UPDATE SET price = EXCLUDED.price
+                    INSERT INTO price_history (ticker, snapshot_date, price, market)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (ticker, snapshot_date) DO UPDATE SET price = EXCLUDED.price, market = EXCLUDED.market
                     """,
-                    (ticker, snapshot_date, price)
+                    (ticker, snapshot_date, price, market)
                 )
 
     def get_history(self, tickers: List[str]) -> List[Dict[str, Any]]:

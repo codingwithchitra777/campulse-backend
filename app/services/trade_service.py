@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 from app.services.lifo_matcher import LifoMatcherService
+from app.services.markets import resolve_market_currency
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,14 @@ def record_trade(
     qty: int,
     commission: Optional[int] = None,
     order_date: Optional[datetime] = None,
+    market: Optional[str] = None,
+    currency: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Persist a trade (BUY or SELL) and, for SELL, run LIFO matching.
     Returns raw (unserialized) dicts: {trade, allocations, realisedPnl, warning}."""
     side = side.upper()
     ticker = ticker.upper()
+    market, currency = resolve_market_currency(market, currency)
 
     if side not in ("BUY", "SELL"):
         raise ValueError("Side must be BUY or SELL")
@@ -52,6 +56,8 @@ def record_trade(
         "qty": qty,
         "commission": commission,
         "orderDate": order_date,
+        "market": market,
+        "currency": currency,
     }
     trade_repo.add_trade(trade)
 

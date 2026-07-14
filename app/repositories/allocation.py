@@ -10,8 +10,8 @@ class AllocationRepository:
                      INSERT INTO allocations (
                          alloc_id, user_id, ticker, sell_trade_id, buy_trade_id, qty_allocated,
                          buy_price, buy_commission, buy_qty, sell_price, sell_commission, sell_qty,
-                         realised_pnl, created_at
-                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         realised_pnl, created_at, market, currency
+                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                      """,
                      (
                          alloc["allocId"],
@@ -27,7 +27,9 @@ class AllocationRepository:
                          alloc["sellCommission"],
                          alloc["sellQty"],
                          alloc["realisedPnl"],
-                         alloc["createdAt"]
+                         alloc["createdAt"],
+                         alloc.get("market", "CSX"),
+                         alloc.get("currency", "KHR")
                      )
                 )
 
@@ -37,7 +39,7 @@ class AllocationRepository:
                 query = """
                      SELECT alloc_id, user_id, ticker, sell_trade_id, buy_trade_id, qty_allocated,
                             buy_price, buy_commission, buy_qty, sell_price, sell_commission, sell_qty,
-                            realised_pnl, created_at FROM allocations WHERE user_id = %s
+                            realised_pnl, created_at, market, currency FROM allocations WHERE user_id = %s
                 """
                 params = [user_id]
                 if ticker:
@@ -61,7 +63,9 @@ class AllocationRepository:
                          "sellCommission": r[10],
                          "sellQty": r[11],
                          "realisedPnl": r[12],
-                         "createdAt": r[13]
+                         "createdAt": r[13],
+                         "market": r[14],
+                         "currency": r[15]
                      }
                      for r in rows
                 ]
@@ -118,7 +122,7 @@ class AllocationRepository:
                      """
                      SELECT alloc_id, user_id, ticker, sell_trade_id, buy_trade_id, qty_allocated,
                             buy_price, buy_commission, buy_qty, sell_price, sell_commission, sell_qty,
-                            realised_pnl, created_at FROM allocations 
+                            realised_pnl, created_at, market, currency FROM allocations
                      WHERE user_id = %s AND buy_trade_id = %s
                      """,
                      (user_id, buy_trade_id)
@@ -139,7 +143,9 @@ class AllocationRepository:
                          "sellCommission": r[10],
                          "sellQty": r[11],
                          "realisedPnl": r[12],
-                         "createdAt": r[13]
+                         "createdAt": r[13],
+                         "market": r[14],
+                         "currency": r[15]
                      }
                      for r in rows
                 ]

@@ -18,6 +18,9 @@ class TradeCreate(BaseModel):
     qty: int
     commission: Optional[int] = None
     orderDate: Optional[datetime] = None
+    # Multi-market: omitted defaults to the CSX/riel behaviour (resolved in record_trade).
+    market: Optional[str] = None
+    currency: Optional[str] = None
 
     _normalize_order_date = field_validator("orderDate")(_to_naive_utc)
 
@@ -40,3 +43,5 @@ class Trade(BaseModel):
     qty: int
     commission: int = 0
     orderDate: datetime
+    market: str = "CSX"
+    currency: str = "KHR"

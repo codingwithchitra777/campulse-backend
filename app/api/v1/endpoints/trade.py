@@ -61,6 +61,7 @@ def add_trade(
             trade_repo, alloc_repo, current_user.user_id,
             trade_req.ticker, trade_req.side, trade_req.price, trade_req.qty,
             commission=trade_req.commission, order_date=trade_req.orderDate,
+            market=trade_req.market, currency=trade_req.currency,
         )
         return {
             "success": True,

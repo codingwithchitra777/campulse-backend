@@ -83,6 +83,11 @@ def init_db(conn):
                 order_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Multi-market foundation (Phase 1): every trade belongs to a market
+        # (CSX | US | GOLD_KH) and is denominated in a currency (KHR | USD).
+        # Existing rows are all CSX/riel, so the defaults backfill them correctly.
+        cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS market VARCHAR(16) NOT NULL DEFAULT 'CSX';")
+        cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NOT NULL DEFAULT 'KHR';")
         # Create allocations table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS allocations (
@@ -102,6 +107,10 @@ def init_db(conn):
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Allocations inherit the trade's market/currency so realised P/L can be
+        # grouped per currency later (kept in sync with the trades table above).
+        cur.execute("ALTER TABLE allocations ADD COLUMN IF NOT EXISTS market VARCHAR(16) NOT NULL DEFAULT 'CSX';")
+        cur.execute("ALTER TABLE allocations ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NOT NULL DEFAULT 'KHR';")
 
         # Account linking: a login identity (alias, e.g. a Telegram user id) points
         # at a canonical account (primary, a Google user id). resolve_primary() maps
@@ -141,3 +150,5 @@ def init_db(conn):
                 PRIMARY KEY (ticker, snapshot_date)
             );
         """)
+        # Which market a snapshotted symbol belongs to (default CSX for existing rows).
+        cur.execute("ALTER TABLE price_history ADD COLUMN IF NOT EXISTS market VARCHAR(16) NOT NULL DEFAULT 'CSX';")

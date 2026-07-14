@@ -71,6 +71,8 @@ class LifoMatcherService:
                 "sellQty": int(sell_trade["qty"]),
                 "realisedPnl": realised,
                 "createdAt": datetime.utcnow(),
+                "market": sell_trade.get("market", "CSX"),
+                "currency": sell_trade.get("currency", "KHR"),
             }
 
             self.alloc_repo.add_allocation(alloc)
