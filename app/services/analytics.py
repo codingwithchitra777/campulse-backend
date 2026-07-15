@@ -106,6 +106,40 @@ class AnalyticsService:
 
         by_currency = sorted(cur.values(), key=lambda g: (g["currency"] != "KHR", g["currency"] or ""))
 
+        # Performance by journal tag: credit each closed trade's win/loss to the
+        # tags on its SELL and on the BUY lots it consumed, so tagging either the
+        # entry rationale or the exit surfaces the pattern.
+        buys_by_sell = defaultdict(set)
+        for a in allocs:
+            buys_by_sell[a["sellTradeId"]].add(a["buyTradeId"])
+
+        def _tags(t):
+            return {s.strip().lower() for s in (t.get("tags") or "").split(",") if s.strip()}
+
+        tag_stats: Dict[str, Any] = defaultdict(lambda: {"tag": None, "trades": 0, "wins": 0, "losses": 0})
+        for sell, pnl in closed:
+            if pnl == 0:
+                continue
+            tagset = set(_tags(sell))
+            for bid in buys_by_sell.get(sell["tradeId"], ()):
+                b = trade_map.get(bid)
+                if b:
+                    tagset |= _tags(b)
+            for tag in tagset:
+                g = tag_stats[tag]
+                g["tag"] = tag
+                g["trades"] += 1
+                if pnl > 0:
+                    g["wins"] += 1
+                else:
+                    g["losses"] += 1
+
+        by_tag = []
+        for g in tag_stats.values():
+            total = g["wins"] + g["losses"]
+            by_tag.append({**g, "winRate": (g["wins"] / total * 100.0) if total else 0.0})
+        by_tag.sort(key=lambda x: (-x["trades"], x["tag"]))
+
         return {
             "tradeCount": len(trades),
             "buyCount": len(buys),
@@ -119,4 +153,5 @@ class AnalyticsService:
             "worstTrade": summarize(worst),
             "byCurrency": by_currency,
             "byMarket": list(by_market.values()),
+            "byTag": by_tag,
         }

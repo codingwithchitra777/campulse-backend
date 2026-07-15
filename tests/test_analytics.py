@@ -59,6 +59,22 @@ def test_analytics_win_rate_and_best_worst(user_id):
     assert khr["wins"] == 1 and khr["losses"] == 1
 
 
+def test_analytics_by_tag(user_id):
+    # Tag the entry rationale, then see how each tag performed.
+    buy1 = _buy(user_id, "abc", 100, 100).json()["trade"]["tradeId"]
+    client.patch(f"/api/trades/{buy1}/journal", headers=auth_headers(user_id), json={"tags": "plan"})
+    _sell(user_id, "abc", 150, 50)   # win, consumes the #plan buy
+
+    buy2 = _buy(user_id, "xyz", 200, 100).json()["trade"]["tradeId"]
+    client.patch(f"/api/trades/{buy2}/journal", headers=auth_headers(user_id), json={"tags": "fomo"})
+    _sell(user_id, "xyz", 150, 50)   # loss, consumes the #fomo buy
+
+    a = client.get("/api/analytics", headers=auth_headers(user_id)).json()
+    by_tag = {g["tag"]: g for g in a["byTag"]}
+    assert by_tag["plan"]["wins"] == 1 and by_tag["plan"]["winRate"] == 100.0
+    assert by_tag["fomo"]["losses"] == 1 and by_tag["fomo"]["winRate"] == 0.0
+
+
 def test_analytics_separates_currencies(user_id):
     _buy(user_id, "abc", 7000, 10)   # CSX / KHR
     client.post("/api/trades", headers=auth_headers(user_id),
