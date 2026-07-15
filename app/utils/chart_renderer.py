@@ -332,8 +332,29 @@ class ChartRenderer:
         
         return self._save(fig)
 
-    def all_stocks_card(self, stocks: list) -> io.BytesIO:
+    def all_stocks_card(self, stocks: list, sparklines: dict = None) -> io.BytesIO:
         """Renders a market overview card showing all stocks."""
+        sparklines = sparklines or {}
+        
+        processed_stocks = []
+        for stock in stocks:
+            s = dict(stock)
+            change = s.get('change', 0)
+            price = s.get('price', 0)
+            change_dir = s.get('change_direction', 'equal')
+            
+            if change_dir == 'down' and change > 0:
+                change = -change
+            elif change_dir == 'up' and change < 0:
+                change = -change
+                
+            s['change'] = change
+            s['change_pct'] = (change / (price - change) * 100) if (price - change) != 0 and change != 0 else 0
+            processed_stocks.append(s)
+            
+        processed_stocks.sort(key=lambda x: x.get('change_pct', 0), reverse=True)
+        stocks = processed_stocks
+        
         num_stocks = min(len(stocks), 15)
         fig_height = max(4.0, num_stocks * 0.9 + 2)
         fig = self._setup_figure(8, fig_height)
@@ -354,19 +375,17 @@ class ChartRenderer:
             symbol = stock.get('ticker', 'N/A')
             price = stock.get('price', 0)
             change = stock.get('change', 0)
-            change_direction = stock.get('change_direction', 'equal')
-            
-            if change_direction == 'up' or change > 0:
+            if change > 0:
                 change_color = self.theme.up_color
                 change_sign = "+"
-            elif change_direction == 'down' or change < 0:
+            elif change < 0:
                 change_color = self.theme.down_color
                 change_sign = "-"
             else:
                 change_color = self.theme.text_secondary
                 change_sign = ""
                 
-            change_pct = (change / (price - change) * 100) if (price - change) != 0 and change != 0 else 0
+            change_pct = stock.get('change_pct', 0)
             
             # Card background
             box_height = row_step * 0.8
@@ -380,6 +399,22 @@ class ChartRenderer:
             # Left: Ticker
             ax.text(0.1, y, symbol, ha="left", va="center", fontsize=16, fontweight='bold', 
                    color=self.theme.text_primary, transform=ax.transAxes)
+                   
+            # Middle: Sparkline
+            sparkline_data = sparklines.get(symbol)
+            if sparkline_data and len(sparkline_data) > 1:
+                min_p = min(sparkline_data)
+                max_p = max(sparkline_data)
+                range_p = max_p - min_p if max_p > min_p else 1
+                norm_data = [(p - min_p) / range_p for p in sparkline_data]
+                
+                # X range: [0.35, 0.65], Y range: [y - box_height*0.3, y + box_height*0.3]
+                x_coords = [0.35 + (0.3 * i / (len(norm_data) - 1)) for i in range(len(norm_data))]
+                y_coords = [y - (box_height * 0.3) + (box_height * 0.6 * p) for p in norm_data]
+                
+                ax.plot(x_coords, y_coords, color=change_color, lw=2, transform=ax.transAxes)
+                ax.fill_between(x_coords, [y - (box_height * 0.3)] * len(x_coords), y_coords, 
+                              color=change_color, alpha=0.1, transform=ax.transAxes)
                    
             # Right: Price (Top) and Change (Bottom)
             price_text = f"{price:,.0f} riel"

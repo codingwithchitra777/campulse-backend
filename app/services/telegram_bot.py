@@ -12,6 +12,7 @@ from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
+from app.services.redis_service import RedisService
 from app.services.trade_service import record_trade
 from app.utils.chart_renderer import ChartRenderer
 from app.services import telegram_client
@@ -245,7 +246,15 @@ class TelegramBotService:
         if not stocks:
             self.client.send_message(chat_id, "❌ No data.")
             return
-        self.client.send_photo(chat_id, self.renderer.all_stocks_card(stocks), "\U0001F4C8 Market Overview")
+            
+        tickers = [s.get('ticker') for s in stocks if s.get('ticker')]
+        try:
+            sparklines = RedisService().get_sparklines_batch(tickers)
+        except Exception as e:
+            logger.error(f"Failed to fetch sparklines: {e}")
+            sparklines = {}
+            
+        self.client.send_photo(chat_id, self.renderer.all_stocks_card(stocks, sparklines), "\U0001F4C8 Market Overview")
 
     def _top_orders(self, user_id: str, chat_id: int) -> None:
         ranked = self.portfolio.top_profitable_buy_orders(user_id, limit=5)
