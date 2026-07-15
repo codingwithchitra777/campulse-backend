@@ -7,6 +7,7 @@ from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
 from app.repositories.manual_price import ManualPriceRepository
 from app.repositories.watchlist import WatchlistRepository
+from app.repositories.alert import AlertRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.price_providers import price_router
@@ -55,6 +56,9 @@ def get_manual_price_repo() -> ManualPriceRepository:
 
 def get_watchlist_repo() -> WatchlistRepository:
     return WatchlistRepository()
+
+def get_alert_repo() -> AlertRepository:
+    return AlertRepository()
 
 def get_pricing_service():
     return pricing_service_instance

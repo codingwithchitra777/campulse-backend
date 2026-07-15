@@ -39,6 +39,9 @@ async def lifespan(app: FastAPI):
     # Daily Telegram session reminders (no-op unless TELEGRAM_WEBHOOK_SECRET set).
     from app.services.reminder_scheduler import start_reminder_scheduler
     start_reminder_scheduler()
+    # Price-alert checker (also a no-op unless the Telegram bot is configured).
+    from app.services.alert_service import start_alert_scheduler
+    start_alert_scheduler()
     yield
     logger.info("shutdown: fastapi app stopping")
 

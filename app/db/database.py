@@ -185,6 +185,24 @@ def init_db(conn):
             END $$;
         """)
 
+        # Price alerts: notify the user (via their linked Telegram) when a symbol
+        # crosses a target. One-shot — deactivated once it fires.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS price_alerts (
+                alert_id VARCHAR(100) PRIMARY KEY,
+                user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                market VARCHAR(16) NOT NULL DEFAULT 'CSX',
+                symbol VARCHAR(50) NOT NULL,
+                currency VARCHAR(8) NOT NULL DEFAULT 'KHR',
+                target_price NUMERIC(20, 4) NOT NULL,
+                direction VARCHAR(8) NOT NULL,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                triggered_at TIMESTAMP
+            );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(active) WHERE active;")
+
         # Symbols a user tracks without owning (feeds live quotes + news).
         cur.execute("""
             CREATE TABLE IF NOT EXISTS watchlist (
