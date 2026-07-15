@@ -3,7 +3,7 @@ from decimal import Decimal
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
-from app.schemas.trade import TradeCreate, TradeUpdate
+from app.schemas.trade import TradeCreate, TradeUpdate, JournalUpdate
 from app.services.lifo_matcher import LifoMatcherService
 from app.services.trade_service import record_trade
 from app.services.markets import quantize_money
@@ -118,6 +118,29 @@ def update_trade(
         raise
     except Exception as e:
         logger.error(f"Error in update_trade: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/trades/{trade_id}/journal")
+def update_trade_journal(
+    trade_id: str,
+    req: JournalUpdate,
+    current_user = Depends(get_current_user),
+    trade_repo = Depends(get_trade_repo)
+):
+    """Set a journal note/tags on any of the user's trades (metadata — allowed
+    on SELL and matched trades, unlike price/qty edits)."""
+    try:
+        trade = trade_repo.get_trade(trade_id)
+        if not trade or trade["userId"] != current_user.user_id:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        note = (req.note or "").strip() or None
+        tags = (req.tags or "").strip() or None
+        updated = trade_repo.update_journal(trade_id, current_user.user_id, note, tags)
+        return serialize_trade(updated)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in update_trade_journal: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/trades/{trade_id}")

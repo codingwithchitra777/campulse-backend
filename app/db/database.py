@@ -88,6 +88,10 @@ def init_db(conn):
         # Existing rows are all CSX/riel, so the defaults backfill them correctly.
         cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS market VARCHAR(16) NOT NULL DEFAULT 'CSX';")
         cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NOT NULL DEFAULT 'KHR';")
+        # Trade journal: a free-text note + comma-separated tags per trade (the
+        # reflection layer — annotate why you made the trade).
+        cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS note TEXT;")
+        cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS tags VARCHAR(255);")
         # Create allocations table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS allocations (

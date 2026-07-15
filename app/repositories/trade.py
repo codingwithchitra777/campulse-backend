@@ -35,7 +35,7 @@ class TradeRepository:
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency FROM trades WHERE trade_id = %s",
+                    "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency, note, tags FROM trades WHERE trade_id = %s",
                     (trade_id,)
                 )
                 row = cur.fetchone()
@@ -52,7 +52,9 @@ class TradeRepository:
                      "commission": row[7],
                      "orderDate": row[8],
                      "market": row[9],
-                     "currency": row[10]
+                     "currency": row[10],
+                     "note": row[11],
+                     "tags": row[12]
                 }
 
     def list_trades(
@@ -65,7 +67,7 @@ class TradeRepository:
     ) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
-                query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency FROM trades WHERE user_id = %s"
+                query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency, note, tags FROM trades WHERE user_id = %s"
                 params = [user_id]
                 if ticker:
                      query += " AND ticker = %s"
@@ -91,7 +93,9 @@ class TradeRepository:
                          "commission": r[7],
                          "orderDate": r[8],
                          "market": r[9],
-                         "currency": r[10]
+                         "currency": r[10],
+                         "note": r[11],
+                         "tags": r[12]
                      }
                      for r in rows
                 ]
@@ -176,6 +180,29 @@ class TradeRepository:
                      "orderDate": row[8],
                      "market": row[9],
                      "currency": row[10]
+                }
+
+    def update_journal(self, trade_id: str, user_id: str, note, tags) -> Optional[Dict[str, Any]]:
+        """Set the journal note/tags on any of the user's trades (metadata, so
+        allowed on matched/SELL trades unlike price/qty edits)."""
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE trades SET note = %s, tags = %s
+                    WHERE trade_id = %s AND user_id = %s
+                    RETURNING trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency, note, tags
+                    """,
+                    (note, tags, trade_id, user_id)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                     "tradeId": row[0], "userId": row[1], "seq": row[2], "ticker": row[3],
+                     "side": row[4], "price": row[5], "qty": row[6], "commission": row[7],
+                     "orderDate": row[8], "market": row[9], "currency": row[10],
+                     "note": row[11], "tags": row[12]
                 }
 
     def delete_trade(self, trade_id: str, user_id: str) -> bool:

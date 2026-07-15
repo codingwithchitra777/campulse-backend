@@ -36,6 +36,10 @@ class TradeUpdate(BaseModel):
 
     _normalize_order_date = field_validator("orderDate")(_to_naive_utc)
 
+class JournalUpdate(BaseModel):
+    note: Optional[str] = None
+    tags: Optional[str] = None
+
 class Trade(BaseModel):
     tradeId: str
     userId: str
