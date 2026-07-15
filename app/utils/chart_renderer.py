@@ -373,7 +373,7 @@ class ChartRenderer:
             box_y = y - (box_height / 2)
             
             box = FancyBboxPatch((0.05, box_y), 0.9, box_height, boxstyle="round,pad=0.01",
-                                 facecolor=self.theme.panel_bg, edgecolor=self.theme.grid_line, 
+                                 facecolor=self.theme.background_top, edgecolor=self.theme.grid_line, 
                                  linewidth=1, transform=ax.transAxes)
             ax.add_patch(box)
             
