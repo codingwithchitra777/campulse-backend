@@ -38,6 +38,27 @@ class PriceHistoryRepository:
                     for r in rows
                 ]
 
+    def get_recent_history_all(self, days: int = 60) -> List[Dict[str, Any]]:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT ticker, snapshot_date, price FROM price_history
+                    WHERE snapshot_date >= CURRENT_DATE - INTERVAL '%s days'
+                    ORDER BY snapshot_date ASC
+                    """,
+                    (days,)
+                )
+                rows = cur.fetchall()
+                return [
+                    {
+                        "ticker": r[0],
+                        "date": r[1].isoformat(),
+                        "price": r[2]
+                    }
+                    for r in rows
+                ]
+
     def delete_snapshots(self, ticker: str) -> int:
         """Test-cleanup helper: remove all snapshots for one exact ticker."""
         with get_db() as conn:

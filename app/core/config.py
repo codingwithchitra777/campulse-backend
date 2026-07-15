@@ -23,6 +23,7 @@ class Settings:
     finnhub_base_url: str = os.getenv("FINNHUB_BASE_URL", "https://finnhub.io/api/v1")
     default_user_id: str = os.getenv("DEFAULT_USER_ID", "u001")
     database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/trading_journal")
+    redis_url: str = os.getenv("REDIS_URL", "redis://default:FIwEoRahdTexVeF2MlgQRyT2XjhwIUuJ@time-camera-show-26003.db.redis.io:11914")
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-insecure-secret-change-me-in-production")
     jwt_expire_days: int = int(os.getenv("JWT_EXPIRE_DAYS", "30"))
 

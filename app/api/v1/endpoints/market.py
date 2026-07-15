@@ -9,11 +9,23 @@ from app.services.finnhub_provider import FinnhubProvider
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.services.portfolio import PortfolioService
+from app.services.redis_service import RedisService
 from app.utils.chart_renderer import ChartRenderer
 from app.api.deps import get_pricing_service, get_trade_repo, get_alloc_repo, get_portfolio_service, get_price_router
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+@router.get("/market/sparklines")
+def get_sparklines(tickers: str = Query(..., description="Comma-separated list of tickers")):
+    """Get 60-day historical sparklines from Redis for a list of tickers."""
+    try:
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        redis_service = RedisService()
+        return redis_service.get_sparklines_batch(ticker_list)
+    except Exception as e:
+        logger.error(f"Error in get_sparklines: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/prices")
 def get_prices(pricing_service = Depends(get_pricing_service)):

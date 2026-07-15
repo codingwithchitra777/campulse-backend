@@ -10,6 +10,7 @@ from cachetools import TTLCache
 import pytz
 from app.core.config import settings
 from app.repositories.price_history import PriceHistoryRepository
+from app.services.redis_service import RedisService
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class PricingService:
     def _background_refresh_loop(self):
         """Periodically refreshes the CSX prices cache in a separate thread."""
         logger.info("CSX pricing background refresh loop started.")
+        self._startup_sync()
         while True:
             try:
                 prices = self._fetch_all_prices_from_api(force=True)
@@ -65,16 +67,45 @@ class PricingService:
                 logger.error(f"Error in CSX price pre-fetch: {e}")
             time.sleep(30)
 
+    def _startup_sync(self):
+        """Sync last 60 days from DB to Redis on startup."""
+        try:
+            repo = PriceHistoryRepository()
+            redis_service = RedisService()
+            history = repo.get_recent_history_all(days=60)
+            for entry in history:
+                redis_service.save_sparkline_price(
+                    entry["ticker"], 
+                    entry["date"], 
+                    float(entry["price"])
+                )
+            logger.info("Startup sync of CSX sparkline data to Redis complete.")
+        except Exception as e:
+            logger.error(f"Error in CSX sparkline startup sync: {e}")
+
     def snapshot_prices(self, prices: List[dict]) -> None:
         """Upsert one price_history row per ticker for today's Phnom Penh
         trading date. DB errors are logged, never propagated to the loop."""
         snapshot_date = datetime.now(PHNOM_PENH_TZ).date()
+        date_str = snapshot_date.strftime("%Y-%m-%d")
         repo = PriceHistoryRepository()
+        redis_service = RedisService()
+        
         for p in prices:
+            ticker = p.get('ticker')
+            if not ticker:
+                continue
+                
+            price = p.get('price')
+            if price is None:
+                continue
+                
             try:
-                repo.upsert_snapshot(p["ticker"], snapshot_date, int(p["price"]))
+                repo.upsert_snapshot(ticker, snapshot_date, int(price))
+                # Also save to Redis for sparkline
+                redis_service.save_sparkline_price(ticker, date_str, float(price))
             except Exception as e:
-                logger.error(f"Failed to snapshot price for {p.get('ticker')}: {e}")
+                logger.error(f"Failed to snapshot price for {ticker}: {e}")
 
     def _fetch_all_prices_from_api(self, force: bool = False) -> list:
         """Helper to fetch from the CSX API and populate all caches in one go."""
