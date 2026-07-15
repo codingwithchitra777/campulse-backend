@@ -334,24 +334,22 @@ class ChartRenderer:
 
     def all_stocks_card(self, stocks: list) -> io.BytesIO:
         """Renders a market overview card showing all stocks."""
-        fig = self._setup_figure(12, 10)
+        num_stocks = min(len(stocks), 15)
+        fig_height = max(4.0, num_stocks * 0.9 + 2)
+        fig = self._setup_figure(8, fig_height)
         ax = fig.add_subplot(111)
         ax.set_axis_off()
         
         # Title
-        ax.text(0.5, 0.96, "MARKET OVERVIEW", ha="center", fontsize=22, 
+        ax.text(0.05, 0.95, "MARKET OVERVIEW", ha="left", fontsize=22, 
                 fontweight='bold', color=self.theme.text_primary, transform=ax.transAxes)
-        ax.plot([0.05, 0.95], [0.94, 0.94], color=self.theme.grid_line, lw=1, transform=ax.transAxes)
         
-        # Header
-        headers = ["Symbol", "Price (KHR)", "Change", "Change %"]
-        col_x = [0.10, 0.40, 0.65, 0.85]
-        for i, header in enumerate(headers):
-            ax.text(col_x[i], 0.90, header, ha="left", fontsize=11, fontweight='bold', 
-                   color=self.theme.text_secondary, transform=ax.transAxes)
+        row_step = 0.88 / max(num_stocks, 1)
+        if row_step > 0.15:
+            row_step = 0.15
+            
+        y = 0.90 - (row_step / 2)
         
-        # Data Rows
-        y = 0.86
         for stock in stocks[:15]:
             symbol = stock.get('ticker', 'N/A')
             price = stock.get('price', 0)
@@ -360,21 +358,39 @@ class ChartRenderer:
             
             if change_direction == 'up' or change > 0:
                 change_color = self.theme.up_color
+                change_sign = "+"
             elif change_direction == 'down' or change < 0:
                 change_color = self.theme.down_color
+                change_sign = "-"
             else:
-                change_color = self.theme.text_primary
-            
+                change_color = self.theme.text_secondary
+                change_sign = ""
+                
             change_pct = (change / (price - change) * 100) if (price - change) != 0 and change != 0 else 0
             
-            ax.text(col_x[0], y, symbol, ha="left", fontsize=10, fontweight='bold', 
-                   color=self.theme.text_primary, transform=ax.transAxes)
-            ax.text(col_x[1], y, f"{price:,.0f}", ha="left", fontsize=10, color=self.theme.text_secondary, transform=ax.transAxes)
-            ax.text(col_x[2], y, f"{change:+,.0f}", ha="left", fontsize=10, fontweight='bold', color=change_color, transform=ax.transAxes)
-            ax.text(col_x[3], y, f"{change_pct:+.2f}%", ha="left", fontsize=10, fontweight='bold', color=change_color, transform=ax.transAxes)
+            # Card background
+            box_height = row_step * 0.8
+            box_y = y - (box_height / 2)
             
-            ax.plot([0.05, 0.95], [y-0.02, y-0.02], color=self.theme.grid_line, lw=0.3, ls=":", transform=ax.transAxes)
-            y -= 0.05
+            box = FancyBboxPatch((0.05, box_y), 0.9, box_height, boxstyle="round,pad=0.01",
+                                 facecolor=self.theme.panel_bg, edgecolor=self.theme.grid_line, 
+                                 linewidth=1, transform=ax.transAxes)
+            ax.add_patch(box)
+            
+            # Left: Ticker
+            ax.text(0.1, y, symbol, ha="left", va="center", fontsize=16, fontweight='bold', 
+                   color=self.theme.text_primary, transform=ax.transAxes)
+                   
+            # Right: Price (Top) and Change (Bottom)
+            price_text = f"{price:,.0f} riel"
+            ax.text(0.9, y + (row_step * 0.15), price_text, ha="right", va="center", fontsize=13, fontweight='bold', 
+                   color=self.theme.text_primary, transform=ax.transAxes)
+                   
+            change_text = f"{change_sign}{abs(change):,.0f} ({change_pct:+.2f}%)"
+            ax.text(0.9, y - (row_step * 0.2), change_text, ha="right", va="center", fontsize=11, fontweight='bold',
+                   color=change_color, transform=ax.transAxes)
+            
+            y -= row_step
         
         return self._save(fig)
 
