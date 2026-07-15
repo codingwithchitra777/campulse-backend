@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.services.portfolio import PortfolioService
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
-from app.api.deps import get_portfolio_service, get_trade_repo, get_alloc_repo, get_current_user
+from app.api.deps import get_portfolio_service, get_trade_repo, get_alloc_repo, get_current_user, get_analytics_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -99,6 +99,17 @@ def get_portfolio(
         return portfolio_service.portfolio(current_user.user_id)
     except Exception as e:
         logger.error(f"Error in get_portfolio: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/analytics")
+def get_analytics(
+    current_user = Depends(get_current_user),
+    analytics = Depends(get_analytics_service)
+):
+    try:
+        return analytics.compute(current_user.user_id)
+    except Exception as e:
+        logger.error(f"Error in get_analytics: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/pnl/yearly")

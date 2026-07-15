@@ -6,6 +6,7 @@ is configured or the symbol is unknown, so the portfolio never crashes on it.
 """
 from __future__ import annotations
 import logging
+from datetime import date, timedelta
 from typing import List, Dict, Any
 
 import requests
@@ -65,6 +66,41 @@ class FinnhubProvider:
             change_direction=direction,
             raw=data,
         )
+
+    def get_company_news(self, symbol: str, days: int = 7) -> List[Dict[str, Any]]:
+        """Recent company news for a US symbol (Finnhub free tier). Empty on error
+        or when no key is configured."""
+        if not self.api_key or not symbol:
+            return []
+        today = date.today()
+        try:
+            r = requests.get(
+                f"{self.base_url}/company-news",
+                params={
+                    "symbol": symbol.upper(),
+                    "from": (today - timedelta(days=days)).isoformat(),
+                    "to": today.isoformat(),
+                    "token": self.api_key,
+                },
+                timeout=5.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Finnhub news error for {symbol}: {e}")
+            return []
+        out = []
+        for it in (data or [])[:15]:
+            out.append({
+                "headline": it.get("headline"),
+                "summary": it.get("summary"),
+                "source": it.get("source"),
+                "url": it.get("url"),
+                "image": it.get("image"),
+                "datetime": it.get("datetime"),  # unix seconds
+                "category": it.get("category"),
+            })
+        return out
 
     def search_symbols(self, query: str) -> List[Dict[str, Any]]:
         """Finnhub /search — used by the frontend to validate/pick US symbols."""

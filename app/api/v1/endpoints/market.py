@@ -33,6 +33,15 @@ def search_symbols(q: str = Query(min_length=1)):
         logger.error(f"Error in search_symbols: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/market/news/{symbol}")
+def get_symbol_news(symbol: str, days: int = Query(default=7, ge=1, le=30)):
+    """Recent company news for a US symbol via Finnhub. Empty for CSX/gold (no feed)."""
+    try:
+        return {"symbol": symbol.upper(), "news": FinnhubProvider().get_company_news(symbol, days)}
+    except Exception as e:
+        logger.error(f"Error in get_symbol_news: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/market/quote/{symbol}")
 def get_market_quote(symbol: str, market: str = Query(default="US"), price_router = Depends(get_price_router)):
     """Market-aware live quote (routes CSX->CSX feed, US->Finnhub)."""

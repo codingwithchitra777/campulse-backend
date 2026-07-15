@@ -185,6 +185,18 @@ def init_db(conn):
             END $$;
         """)
 
+        # Symbols a user tracks without owning (feeds live quotes + news).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS watchlist (
+                user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                market VARCHAR(16) NOT NULL DEFAULT 'CSX',
+                symbol VARCHAR(50) NOT NULL,
+                currency VARCHAR(8) NOT NULL DEFAULT 'KHR',
+                added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, market, symbol)
+            );
+        """)
+
         # Phase 3 — admin-maintained prices for instruments with no live feed
         # (local Cambodian gold: no free API, so an admin sets the daily board).
         # One current row per (market, symbol); the ManualProvider reads it.
