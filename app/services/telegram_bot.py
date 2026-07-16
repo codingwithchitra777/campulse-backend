@@ -296,3 +296,41 @@ class TelegramBotService:
                 break
             offset += 200
         return sent
+
+    def broadcast_market_overview(self, caption: str) -> int:
+        """Fetch market overview and broadcast to all users."""
+        import io
+        stocks = self.pricing.get_all_prices()
+        if not stocks:
+            logger.warning("No stocks data available for market overview broadcast.")
+            return 0
+            
+        tickers = [s.get('ticker') for s in stocks if s.get('ticker')]
+        try:
+            from app.services.redis_service import RedisService
+            sparklines = RedisService().get_sparklines_batch(tickers)
+        except Exception as e:
+            logger.error(f"Failed to fetch sparklines for broadcast: {e}")
+            sparklines = {}
+            
+        photo_bytes = self.renderer.all_stocks_card(stocks, sparklines)
+        photo_data = photo_bytes.getvalue()
+        
+        sent = 0
+        offset = 0
+        while True:
+            batch = self.user_repo.get_all_users(limit=200, offset=offset)
+            if not batch:
+                break
+            for u in batch:
+                cid = u.get("chat_id")
+                if cid:
+                    try:
+                        self.client.send_photo(int(cid), io.BytesIO(photo_data), caption)
+                        sent += 1
+                    except Exception as e:
+                        logger.error(f"Failed to broadcast overview to {cid}: {e}")
+            if len(batch) < 200:
+                break
+            offset += 200
+        return sent

@@ -17,10 +17,10 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 PHNOM_PENH_TZ = pytz.timezone("Asia/Phnom_Penh")
-# (hour, message) — 1h before session start / end.
+# (hour, minute, message)
 REMINDERS = [
-    (8, "\U0001F680 Trading session starts in 1 hour!"),
-    (14, "\U0001F3C1 Trading session ends in 1 hour!"),
+    (9, 1, "🌅 The CSX Market is now OPEN! Here is your opening overview:"),
+    (15, 1, "🏁 The CSX Market is now CLOSED! Here is the final overview:"),
 ]
 
 _started = False
@@ -30,8 +30,8 @@ _lock = threading.Lock()
 def _seconds_until_next(now: datetime):
     """Return (delay_seconds, message) for the soonest upcoming reminder."""
     best = None
-    for hour, text in REMINDERS:
-        target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    for hour, minute, text in REMINDERS:
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if target <= now:
             target += timedelta(days=1)
         delay = (target - now).total_seconds()
@@ -48,7 +48,7 @@ def _loop():
         delay, text = _seconds_until_next(datetime.now(PHNOM_PENH_TZ))
         time.sleep(max(1, delay))
         try:
-            count = TelegramBotService().broadcast(text)
+            count = TelegramBotService().broadcast_market_overview(text)
             logger.info(f"Sent session reminder to {count} users.")
         except Exception as e:
             logger.error(f"Reminder broadcast failed: {e}", exc_info=True)
