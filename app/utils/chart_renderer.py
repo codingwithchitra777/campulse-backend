@@ -127,13 +127,11 @@ class ChartRenderer:
         ax_chart.fill_between(x, prices, prices.min(), color=glow, alpha=0.15)
         ax_chart.fill_between(x, prices, prices.min(), color=glow, alpha=0.05) # Double layer for depth
 
-        # Grid Lines
-        ax_chart.grid(True, color=self.theme.grid_line, linestyle="--", linewidth=0.8, alpha=0.5)
-        ax_chart.spines['top'].set_visible(False)
-        ax_chart.spines['right'].set_visible(False)
-        ax_chart.spines['left'].set_color(self.theme.text_secondary)
-        ax_chart.spines['bottom'].set_color(self.theme.text_secondary)
-        ax_chart.tick_params(colors=self.theme.text_secondary)
+        # Sparkline Styling (No grid, no axes)
+        ax_chart.grid(False)
+        for spine in ax_chart.spines.values():
+            spine.set_visible(False)
+        ax_chart.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 
         # Header Text (Inside Chart Area)
         # Ticker & Company Name
