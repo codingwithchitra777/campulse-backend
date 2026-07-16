@@ -41,8 +41,16 @@ def _format(alert: dict, price: Decimal) -> str:
     unit = "$" if cur == "USD" else "៛"
     arrow = "▲" if alert["direction"] == "above" else "▼"
     tgt = alert["targetPrice"]
+    
+    if cur == "KHR":
+        tgt_str = f"{int(tgt):,}"
+        price_str = f"{int(price):,}"
+    else:
+        tgt_str = f"{tgt:,.2f}"
+        price_str = f"{price:,.2f}"
+        
     return (f"🔔 Price alert: {alert['symbol']} {arrow} {alert['direction']} "
-            f"{unit}{tgt}\nNow: {unit}{price}")
+            f"{unit}{tgt_str}\nNow: {unit}{price_str}")
 
 
 class AlertService:
@@ -62,11 +70,13 @@ class AlertService:
             key = (a["market"], a["symbol"])
             if key not in price_cache:
                 res = self.price_router.get_latest_price(a["market"], a["symbol"])
-                price_cache[key] = res.price
-            raw = price_cache[key]
-            if raw is None:
+                price_cache[key] = res
+            
+            res = price_cache[key]
+            if res.price is None or (res.raw and res.raw.get("fallback")):
                 continue
-            price = Decimal(str(raw))
+                
+            price = Decimal(str(res.price))
             target = Decimal(str(a["targetPrice"]))
             if not _crossed(a["direction"], price, target):
                 continue
