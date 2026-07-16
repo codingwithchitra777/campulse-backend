@@ -21,6 +21,9 @@ class Settings:
     # International equities provider (Phase 2). Unused until a US instrument exists.
     finnhub_api_key: str = os.getenv("FINNHUB_API_KEY", "")
     finnhub_base_url: str = os.getenv("FINNHUB_BASE_URL", "https://finnhub.io/api/v1")
+    # AI Coach. Absent => the coach degrades to off rather than erroring.
+    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8")
     default_user_id: str = os.getenv("DEFAULT_USER_ID", "u001")
     database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/trading_journal")
     redis_url: str = os.getenv("REDIS_URL", "redis://default:FIwEoRahdTexVeF2MlgQRyT2XjhwIUuJ@time-camera-show-26003.db.redis.io:11914")

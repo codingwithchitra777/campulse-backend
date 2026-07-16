@@ -219,6 +219,19 @@ def init_db(conn):
             );
         """)
 
+        # AI Coach: one cached insight per user. snapshot_hash is the cache key —
+        # a regenerate is skipped while the user's stats hash to the same value.
+        # generated_at also backs the once-per-day refresh limit.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ai_insights (
+                user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                snapshot_hash VARCHAR(64) NOT NULL,
+                insight TEXT NOT NULL,
+                model VARCHAR(64) NOT NULL,
+                generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
         # Phase 3 — admin-maintained prices for instruments with no live feed
         # (local Cambodian gold: no free API, so an admin sets the daily board).
         # One current row per (market, symbol); the ManualProvider reads it.

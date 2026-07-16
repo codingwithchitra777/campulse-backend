@@ -15,6 +15,7 @@ dependencies = [
     "logfire[fastapi]",
     "pyjwt",
     "redis",
+    "anthropic",
 ]
 
 [tool.uv]
