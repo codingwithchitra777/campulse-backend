@@ -144,12 +144,17 @@ def test_disclaimer_is_server_side():
 
 # ---- endpoints ----
 
-def test_get_insights_degrades_when_no_key(uid, monkeypatch):
+def test_get_insights_works_with_no_key_and_no_credit(uid, monkeypatch):
+    """The free coach is the product: GET must never depend on a key or billing."""
     monkeypatch.setattr(ai_coach, "is_configured", lambda: False)
     r = client.get("/api/ai/insights", headers=auth_headers(uid))
     assert r.status_code == 200
     body = r.json()
-    assert body["enabled"] is False and body["insight"] is None
+    assert body["source"] == "rules"
+    assert body["aiEnabled"] is False
+    assert body["ai"] is None
+    assert body["insight"]  # a brand-new user still gets the thin-data note
+    assert body["disclaimer"]
 
 
 def test_refresh_returns_503_when_no_key(uid, monkeypatch):

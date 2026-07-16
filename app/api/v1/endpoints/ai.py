@@ -1,7 +1,12 @@
-"""AI Coach endpoints.
+"""Coach endpoints.
 
-GET  /api/ai/insights  — cached insight, never calls the model.
-POST /api/ai/insights  — regenerate; rate-limited and skipped when nothing changed.
+The free, rule-based coach is the product; the AI pass is an optional extra on
+the same snapshot. So GET always returns something useful with no key, no
+credit, and no network call — `ai` is just an extra block when it's available.
+
+GET  /api/ai/insights  — free rule-based insight (+ any cached AI one). Never
+                         calls a model, never fails on billing.
+POST /api/ai/insights  — the paid AI pass; rate-limited, skipped when unchanged.
 GET  /api/ai/health    — admin-only live key check (makes one real, tiny call).
 """
 import logging
@@ -11,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import (get_current_user, require_admin, get_analytics_service,
                           get_ai_insight_repo, get_ai_coach_service)
-from app.services import ai_coach
+from app.services import ai_coach, rule_coach
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,18 +42,22 @@ def get_insight(
     analytics = Depends(get_analytics_service),
     insight_repo = Depends(get_ai_insight_repo),
 ):
-    """Read-only. Returns the cached insight and whether the user's numbers have
-    moved since it was written, so the UI can offer a refresh."""
+    """Free and always available. `ai` carries the cached AI pass when one exists,
+    with `stale` telling the UI whether the user's numbers have moved since."""
     try:
-        if not ai_coach.is_configured():
-            return {"enabled": False, "insight": None, "disclaimer": ai_coach.DISCLAIMER}
-        cached = insight_repo.get(current_user.user_id)
-        if not cached:
-            return {"enabled": True, "insight": None, "stale": True,
-                    "disclaimer": ai_coach.DISCLAIMER}
         snapshot = ai_coach.build_snapshot(analytics.compute(current_user.user_id))
-        stale = ai_coach.snapshot_hash(snapshot) != cached["snapshotHash"]
-        return {"enabled": True, **_payload(cached, stale=stale)}
+        body = {
+            "insight": rule_coach.build_insight(snapshot),
+            "source": "rules",
+            "disclaimer": ai_coach.DISCLAIMER,
+            "aiEnabled": ai_coach.is_configured(),
+            "ai": None,
+        }
+        cached = insight_repo.get(current_user.user_id)
+        if cached:
+            stale = ai_coach.snapshot_hash(snapshot) != cached["snapshotHash"]
+            body["ai"] = _payload(cached, stale=stale)
+        return body
     except Exception as e:
         logger.error(f"Error in get_insight: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
