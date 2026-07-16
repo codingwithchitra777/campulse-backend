@@ -362,7 +362,7 @@ class ChartRenderer:
         ax.set_axis_off()
         
         # Title
-        ax.text(0.05, 0.95, "MARKET OVERVIEW", ha="left", fontsize=22, 
+        ax.text(0.5, 0.95, "MARKET OVERVIEW", ha="center", fontsize=22, 
                 fontweight='bold', color=self.theme.text_primary, transform=ax.transAxes)
         
         row_step = 0.88 / max(num_stocks, 1)
@@ -397,7 +397,7 @@ class ChartRenderer:
             ax.add_patch(box)
             
             # Left: Ticker
-            ax.text(0.1, y, symbol, ha="left", va="center", fontsize=16, fontweight='bold', 
+            ax.text(0.1, y, symbol, ha="left", va="center", fontsize=15, fontweight='bold', 
                    color=self.theme.text_primary, transform=ax.transAxes)
                    
             # Middle: Sparkline
@@ -408,11 +408,11 @@ class ChartRenderer:
                 range_p = max_p - min_p if max_p > min_p else 1
                 norm_data = [(p - min_p) / range_p for p in sparkline_data]
                 
-                # X range: [0.35, 0.65], Y range: [y - box_height*0.3, y + box_height*0.3]
-                x_coords = [0.35 + (0.3 * i / (len(norm_data) - 1)) for i in range(len(norm_data))]
+                # X range: [0.3, 0.7], Y range: [y - box_height*0.3, y + box_height*0.3]
+                x_coords = [0.3 + (0.4 * i / (len(norm_data) - 1)) for i in range(len(norm_data))]
                 y_coords = [y - (box_height * 0.3) + (box_height * 0.6 * p) for p in norm_data]
                 
-                ax.plot(x_coords, y_coords, color=change_color, lw=2, transform=ax.transAxes)
+                ax.plot(x_coords, y_coords, color=change_color, lw=2.5, transform=ax.transAxes)
                 ax.fill_between(x_coords, [y - (box_height * 0.3)] * len(x_coords), y_coords, 
                               color=change_color, alpha=0.1, transform=ax.transAxes)
                    
@@ -422,7 +422,7 @@ class ChartRenderer:
                    color=self.theme.text_primary, transform=ax.transAxes)
                    
             change_text = f"{change_sign}{abs(change):,.0f} ({change_pct:+.2f}%)"
-            ax.text(0.9, y - (row_step * 0.2), change_text, ha="right", va="center", fontsize=11, fontweight='bold',
+            ax.text(0.9, y - (row_step * 0.2), change_text, ha="right", va="center", fontsize=12, fontweight='bold',
                    color=change_color, transform=ax.transAxes)
             
             y -= row_step
