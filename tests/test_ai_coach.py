@@ -163,6 +163,16 @@ def test_refresh_returns_503_when_no_key(uid, monkeypatch):
     assert r.status_code == 503
 
 
+def test_refresh_rejects_thin_data_without_caching(uid, monkeypatch):
+    """A fresh user (0 closed trades) must not mint a cached 'AI insight'."""
+    monkeypatch.setattr(ai_coach, "is_configured", lambda: True)
+    r = client.post("/api/ai/insights", headers=auth_headers(uid))
+    assert r.status_code == 409
+    assert "closed trade" in r.json()["detail"]
+    from app.repositories.ai_insight import AIInsightRepository
+    assert AIInsightRepository().get(uid) is None
+
+
 def test_insights_require_auth():
     assert client.get("/api/ai/insights").status_code == 401
 

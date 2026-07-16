@@ -75,6 +75,13 @@ def refresh_insight(
             raise HTTPException(status_code=503, detail="The AI coach is not configured.")
 
         snapshot = ai_coach.build_snapshot(analytics.compute(current_user.user_id))
+
+        # Thin data never reaches the model, so don't cache it as an "AI insight"
+        # (the free readout already says the same thing) or burn the daily limit.
+        thin = ai_coach.thin_data_message(snapshot)
+        if thin:
+            raise HTTPException(status_code=409, detail=thin)
+
         digest = ai_coach.snapshot_hash(snapshot)
         cached = insight_repo.get(current_user.user_id)
 
