@@ -4,7 +4,8 @@ logged and swallowed — never raise into the webhook handler, or Telegram
 would retry the whole update."""
 import io
 import logging
-from typing import Optional
+from typing import Optional, Union
+import time
 
 import requests
 
@@ -24,22 +25,50 @@ def send_message(chat_id: int, text: str, parse_mode: Optional[str] = None) -> N
     if parse_mode:
         payload["parse_mode"] = parse_mode
     try:
-        requests.post(_url("sendMessage"), json=payload, timeout=10).raise_for_status()
+        resp = requests.post(_url("sendMessage"), json=payload, timeout=10)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if e.response and e.response.status_code == 429:
+            retry_after = e.response.json().get("parameters", {}).get("retry_after", 3)
+            logger.warning(f"Rate limited (429). Retry after {retry_after}s for chat {chat_id}")
+            time.sleep(retry_after)
+            return send_message(chat_id, text, parse_mode)
+        logger.error(f"Telegram sendMessage failed (chat {chat_id}): {e}")
     except Exception as e:
         logger.error(f"Telegram sendMessage failed (chat {chat_id}): {e}")
 
 
-def send_photo(chat_id: int, image: io.BytesIO, caption: Optional[str] = None) -> None:
-    image.seek(0)
+def send_photo(chat_id: int, image: Union[io.BytesIO, str], caption: Optional[str] = None) -> Optional[str]:
     data = {"chat_id": str(chat_id)}
     if caption:
         data["caption"] = caption
     try:
-        requests.post(
-            _url("sendPhoto"),
-            data=data,
-            files={"photo": ("card.png", image, "image/png")},
-            timeout=20,
-        ).raise_for_status()
+        if isinstance(image, str):
+            data["photo"] = image
+            resp = requests.post(_url("sendPhoto"), json=data, timeout=20)
+        else:
+            image.seek(0)
+            resp = requests.post(
+                _url("sendPhoto"),
+                data=data,
+                files={"photo": ("card.png", image, "image/png")},
+                timeout=20,
+            )
+        resp.raise_for_status()
+        
+        result = resp.json().get("result", {})
+        photos = result.get("photo", [])
+        if photos:
+            return photos[-1].get("file_id")
+        return None
+    except requests.exceptions.HTTPError as e:
+        if e.response and e.response.status_code == 429:
+            retry_after = e.response.json().get("parameters", {}).get("retry_after", 3)
+            logger.warning(f"Rate limited (429). Retry after {retry_after}s for chat {chat_id}")
+            time.sleep(retry_after)
+            return send_photo(chat_id, image, caption)
+        logger.error(f"Telegram sendPhoto failed (chat {chat_id}): {e}")
+        return None
     except Exception as e:
         logger.error(f"Telegram sendPhoto failed (chat {chat_id}): {e}")
+        return None

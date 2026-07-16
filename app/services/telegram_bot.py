@@ -281,6 +281,7 @@ class TelegramBotService:
     def broadcast(self, text: str) -> int:
         """Send `text` to every user with a stored chat_id. Returns count sent.
         Pages through all users (get_all_users is paginated)."""
+        import time
         sent = 0
         offset = 0
         while True:
@@ -292,6 +293,7 @@ class TelegramBotService:
                 if cid:
                     self.client.send_message(int(cid), text)
                     sent += 1
+                    time.sleep(0.05)
             if len(batch) < 200:
                 break
             offset += 200
@@ -318,6 +320,9 @@ class TelegramBotService:
         
         sent = 0
         offset = 0
+        file_id = None
+        import time
+        
         while True:
             batch = self.user_repo.get_all_users(limit=200, offset=offset)
             if not batch:
@@ -326,8 +331,14 @@ class TelegramBotService:
                 cid = u.get("chat_id")
                 if cid:
                     try:
-                        self.client.send_photo(int(cid), io.BytesIO(photo_data), caption)
+                        if file_id:
+                            self.client.send_photo(int(cid), file_id, caption)
+                        else:
+                            returned_id = self.client.send_photo(int(cid), io.BytesIO(photo_data), caption)
+                            if returned_id:
+                                file_id = returned_id
                         sent += 1
+                        time.sleep(0.05)
                     except Exception as e:
                         logger.error(f"Failed to broadcast overview to {cid}: {e}")
             if len(batch) < 200:
