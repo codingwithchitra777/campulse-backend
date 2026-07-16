@@ -428,7 +428,7 @@ class ChartRenderer:
         return self._save(fig)
 
     def stock_detail_card(self, ticker: str, buys: list, sells: list, allocs: list, summary: dict) -> io.BytesIO:
-        """Renders a detailed stock card with LIFO allocation visualization."""
+        """Renders a detailed stock card with lot allocation visualization."""
         fig = self._setup_figure(14, 10)
         
         gs = fig.add_gridspec(2, 2, height_ratios=[1, 1.5], width_ratios=[1, 1], 

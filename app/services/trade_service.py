@@ -8,7 +8,7 @@ from decimal import Decimal
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from app.services.lifo_matcher import LifoMatcherService
+from app.services.best_profit_matcher import BestProfitMatcherService
 from app.services.markets import resolve_market_currency, quantize_money
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def record_trade(
     market: Optional[str] = None,
     currency: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Persist a trade (BUY or SELL) and, for SELL, run LIFO matching.
+    """Persist a trade (BUY or SELL) and, for SELL, run best-profit matching.
     Returns raw (unserialized) dicts: {trade, allocations, realisedPnl, warning}."""
     side = side.upper()
     ticker = ticker.upper()
@@ -70,10 +70,10 @@ def record_trade(
     warning = None
     if side == "SELL":
         try:
-            allocations = LifoMatcherService(trade_repo, alloc_repo).match_sell_lifo(trade)
+            allocations = BestProfitMatcherService(trade_repo, alloc_repo).match_sell(trade)
             realised_pnl = sum((Decimal(a.get("realisedPnl", 0)) for a in allocations), Decimal(0))
         except Exception as e:
-            logger.warning(f"LIFO Matching warning: {e}")
-            warning = f"LIFO Match failed: {e}"
+            logger.warning(f"Lot matching warning: {e}")
+            warning = f"Lot matching failed: {e}"
 
     return {"trade": trade, "allocations": allocations, "realisedPnl": realised_pnl, "warning": warning}

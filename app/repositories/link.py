@@ -75,7 +75,7 @@ class LinkRepository:
         """Re-key the alias account's trades + allocations onto the primary. Trade
         seq is per-user (MAX+1), so alias trades are renumbered above the primary's
         current max to avoid collisions; allocations reference stable trade_ids, so
-        LIFO history is preserved. Returns the number of trades moved."""
+        match history is preserved. Returns the number of trades moved."""
         if alias_id == primary_id:
             return 0
         with get_db() as conn:

@@ -177,7 +177,7 @@ class TelegramBotService:
         if side == "SELL":
             caption += f" | P/L: {result['realisedPnl']:+,} riel"
             if result["warning"]:
-                caption += "\n(LIFO match failed, but trade saved)"
+                caption += "\n(Lot matching failed, but trade saved)"
             elif result["allocations"]:
                 matched = [
                     f"#{self._seq_of(a.get('buyTradeId'))} ({a['qtyAllocated']}@{a['buyPrice']:,})"

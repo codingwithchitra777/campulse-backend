@@ -8,7 +8,11 @@ from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.services.markets import quantize_money
 
-class LifoMatcherService:
+class BestProfitMatcherService:
+    """Matches SELLs against open BUY lots **cheapest-price-first** (minimum cost
+    basis => maximum realised P/L). This is deliberately NOT LIFO — the old
+    `LifoMatcherService` name was a misnomer and has been retired."""
+
     def __init__(self, trade_repo: TradeRepository, alloc_repo: AllocationRepository):
         self.trade_repo = trade_repo
         self.alloc_repo = alloc_repo
@@ -17,7 +21,7 @@ class LifoMatcherService:
         allocs = self.alloc_repo.list_allocations_for_buy(user_id, buy_trade_id)
         return sum(int(a["qtyAllocated"]) for a in allocs)
 
-    def match_sell_lifo(self, sell_trade: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def match_sell(self, sell_trade: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Create allocations rows for this SELL trade.
         Best-profit matching: consumes the LOWEST PRICE open buy lots first
@@ -25,7 +29,7 @@ class LifoMatcherService:
         Assumes sell_trade already inserted.
         """
         if sell_trade["side"] != "SELL":
-            raise ValueError("match_sell_lifo expects a SELL trade")
+            raise ValueError("match_sell expects a SELL trade")
 
         user_id = sell_trade["userId"]
         ticker = sell_trade["ticker"]
@@ -93,10 +97,10 @@ class LifoMatcherService:
 
         return allocations_created
 
-    def simulate_sell_lifo(self, user_id: str, ticker: str, price, qty: int, commission=None, market: Optional[str] = None) -> Dict[str, Any]:
+    def simulate_sell(self, user_id: str, ticker: str, price, qty: int, commission=None, market: Optional[str] = None) -> Dict[str, Any]:
         """
         Simulate best-profit matching for a proposed SELL trade and compute
-        simulated P/L. Must mirror match_sell_lifo's lot ordering exactly.
+        simulated P/L. Must mirror match_sell's lot ordering exactly.
         Does NOT insert any records into the database.
         """
         from app.services.markets import normalize_market, default_currency

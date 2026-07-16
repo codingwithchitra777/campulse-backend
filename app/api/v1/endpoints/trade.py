@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from app.schemas.trade import TradeCreate, TradeUpdate, JournalUpdate
-from app.services.lifo_matcher import LifoMatcherService
+from app.services.best_profit_matcher import BestProfitMatcherService
 from app.services.trade_service import record_trade
 from app.services.markets import quantize_money
 from app.api.deps import get_trade_repo, get_alloc_repo, get_portfolio_service, get_current_user
@@ -203,8 +203,8 @@ def init_trade(
             }
 
         # SELL side validation & simulation
-        lifo_service = LifoMatcherService(trade_repo, alloc_repo)
-        sim_res = lifo_service.simulate_sell_lifo(x_user_id, ticker, price, qty, commission=trade_req.commission, market=trade_req.market)
+        matcher = BestProfitMatcherService(trade_repo, alloc_repo)
+        sim_res = matcher.simulate_sell(x_user_id, ticker, price, qty, commission=trade_req.commission, market=trade_req.market)
 
         return {
             "success": True,
