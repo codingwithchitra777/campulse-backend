@@ -58,3 +58,31 @@ class RedisService:
         for ticker in tickers:
             result[ticker.upper()] = self.get_sparkline(ticker)
         return result
+
+    def acquire_lock(self, lock_name: str, timeout: int = 10) -> bool:
+        """Acquires a distributed lock with a timeout in seconds."""
+        try:
+            return bool(self.client.set(lock_name, "1", ex=timeout, nx=True))
+        except Exception as e:
+            logger.error(f"Error acquiring lock {lock_name}: {e}")
+            return False
+
+    def save_latest_prices(self, prices: List[Dict]):
+        """Serializes and saves the latest market prices to Redis."""
+        try:
+            import json
+            self.client.set("csx:latest_prices", json.dumps(prices))
+        except Exception as e:
+            logger.error(f"Error saving latest prices to Redis: {e}")
+
+    def get_latest_prices(self) -> List[Dict]:
+        """Retrieves and deserializes the latest market prices from Redis."""
+        try:
+            import json
+            data = self.client.get("csx:latest_prices")
+            if data:
+                return json.loads(data)
+            return []
+        except Exception as e:
+            logger.error(f"Error getting latest prices from Redis: {e}")
+            return []
