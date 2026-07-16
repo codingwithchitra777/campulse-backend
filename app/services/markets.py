@@ -81,6 +81,8 @@ def format_money(value, currency, sign: bool = False) -> str:
     dp = money_precision(cur)
     amount = quantize_money(value, cur)
     sym = CURRENCY_SYMBOL.get(cur, cur)
-    spec = f"{'+' if sign else ''},.{dp}f"
-    num = format(amount, spec)
-    return f"{sym}{num}" if cur == "USD" else f"{num} {sym}"
+    # The +/- goes outside the symbol ("-$40.50", not "$-40.50"), so format the
+    # magnitude and attach the sign ourselves.
+    prefix = "-" if amount < 0 else ("+" if sign else "")
+    num = format(abs(amount), f",.{dp}f")
+    return f"{prefix}{sym}{num}" if cur == "USD" else f"{prefix}{num} {sym}"

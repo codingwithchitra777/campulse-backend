@@ -79,6 +79,15 @@ def test_format_renders_money_not_raw_decimal():
     assert "320.5000" not in msg
 
 
+def test_format_puts_the_sign_outside_the_currency_symbol():
+    """"-$40.50", never "$-40.50" — and the same for a signed positive."""
+    from app.services.markets import format_money
+    assert format_money(Decimal("-40.5"), "USD") == "-$40.50"
+    assert format_money(Decimal("120"), "USD", sign=True) == "+$120.00"
+    assert format_money(Decimal("-2050"), "KHR") == "-2,050 ៛"
+    assert format_money(Decimal("2050"), "KHR", sign=True) == "+2,050 ៛"
+
+
 def test_crossed_logic():
     assert _crossed("above", Decimal(320), Decimal(300)) is True
     assert _crossed("above", Decimal(290), Decimal(300)) is False
