@@ -86,19 +86,13 @@ class TelegramBotService:
         try:
             is_group = chat_id < 0
             
-            if command == "start":
-                self._start(user_id, chat_id, full_name, remainder)
-            elif command in ("buy", "sell"):
-                self._trade(account_id, chat_id, command.upper(), remainder)
-            elif command == "price":
-                self._price(account_id, chat_id, remainder)
-            elif command == "show_all":
-                self._show_all(account_id, chat_id)
-            elif command in ("portfolio", "position", "stock", "top_orders", "top_tickers"):
+            if command in ("start", "portfolio", "position", "stock", "top_orders", "top_tickers"):
                 if is_group:
                     self.client.send_message(chat_id, "❌ This command is not allowed in group chats.")
                 else:
-                    if command == "portfolio":
+                    if command == "start":
+                        self._start(user_id, chat_id, full_name, remainder)
+                    elif command == "portfolio":
                         self._portfolio(account_id, chat_id)
                     elif command == "position":
                         self._position(account_id, chat_id, remainder)
@@ -108,6 +102,12 @@ class TelegramBotService:
                         self._top_orders(account_id, chat_id)
                     elif command == "top_tickers":
                         self._top_tickers(account_id, chat_id)
+            elif command in ("buy", "sell"):
+                self._trade(account_id, chat_id, command.upper(), remainder)
+            elif command == "price":
+                self._price(account_id, chat_id, remainder)
+            elif command == "show_all":
+                self._show_all(account_id, chat_id)
             else:
                 self.client.send_message(chat_id, HELP_TEXT)
         except Exception as e:
