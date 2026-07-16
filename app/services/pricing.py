@@ -146,7 +146,10 @@ class PricingService:
                         else:
                             change = int(change_val)
                             
-                    change_direction = stock_data.get("changeUpDown", "equal")
+                    change_direction = stock_data.get("changeUpDown", "equal").lower()
+                    
+                    if change_direction == "down" and change > 0:
+                        change = -change
                     
                     all_stocks.append({
                         "ticker": ticker,
