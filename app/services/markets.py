@@ -65,3 +65,22 @@ def quantize_money(value, currency) -> Decimal:
     dp = money_precision(currency)
     q = Decimal(1) if dp == 0 else Decimal(1).scaleb(-dp)
     return Decimal(value).quantize(q, rounding=ROUND_HALF_UP)
+
+
+CURRENCY_SYMBOL = {"KHR": "៛", "USD": "$"}
+
+
+def format_money(value, currency, sign: bool = False) -> str:
+    """Human-readable money for outbound text (Telegram messages, captions).
+
+    Mirrors the web MoneyPipe: KHR renders whole with a trailing ៛ ("2,050 ៛"),
+    USD with a leading $ and cents ("$172.34"). Always quantize first — money is
+    NUMERIC(20,4), so a raw Decimal would print artifacts like "2050.0000".
+    """
+    cur = (currency or "KHR").upper()
+    dp = money_precision(cur)
+    amount = quantize_money(value, cur)
+    sym = CURRENCY_SYMBOL.get(cur, cur)
+    spec = f"{'+' if sign else ''},.{dp}f"
+    num = format(amount, spec)
+    return f"{sym}{num}" if cur == "USD" else f"{num} {sym}"

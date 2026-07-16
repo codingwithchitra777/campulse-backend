@@ -55,7 +55,7 @@ def test_buy_trade_is_persisted(user_id):
     assert listed["items"][0]["tradeId"] == body["trade"]["tradeId"]
 
 
-def test_sell_lifo_matches_against_buy(user_id):
+def test_sell_matches_against_buy(user_id):
     client.post(
         "/api/trades",
         headers=auth_headers(user_id),

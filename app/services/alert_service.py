@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Optional, Callable
 
 from app.core.config import settings
+from app.services.markets import format_money
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +38,11 @@ def _crossed(direction: str, price: Decimal, target: Decimal) -> bool:
 
 
 def _format(alert: dict, price: Decimal) -> str:
-    cur = (alert.get("currency") or "KHR").upper()
-    unit = "$" if cur == "USD" else "៛"
+    cur = alert.get("currency") or "KHR"
     arrow = "▲" if alert["direction"] == "above" else "▼"
-    tgt = alert["targetPrice"]
-    
-    if cur == "KHR":
-        tgt_str = f"{int(tgt):,}"
-        price_str = f"{int(price):,}"
-    else:
-        tgt_str = f"{tgt:,.2f}"
-        price_str = f"{price:,.2f}"
-        
     return (f"🔔 Price alert: {alert['symbol']} {arrow} {alert['direction']} "
-            f"{unit}{tgt_str}\nNow: {unit}{price_str}")
+            f"{format_money(alert['targetPrice'], cur)}\n"
+            f"Now: {format_money(price, cur)}")
 
 
 class AlertService:

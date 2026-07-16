@@ -14,6 +14,7 @@ from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.redis_service import RedisService
 from app.services.trade_service import record_trade
+from app.services.markets import format_money
 from app.utils.chart_renderer import ChartRenderer
 from app.services import telegram_client
 
@@ -158,7 +159,7 @@ class TelegramBotService:
         direction = (res.change_direction or "equal").lower()
         img = self.renderer.price_card(ticker, price, change, direction)
         emoji = "\U0001F4C8" if direction == "up" else ("\U0001F4C9" if direction == "down" else "➡️")
-        self.client.send_photo(chat_id, img, f"{emoji} {ticker} | {price:,.0f} riel")
+        self.client.send_photo(chat_id, img, f"{emoji} {ticker} | {format_money(price, 'KHR')}")
 
     def _trade(self, user_id: str, chat_id: int, side: str, remainder: str) -> None:
         args = CommandParser.parse_trade_args(remainder)
@@ -175,7 +176,7 @@ class TelegramBotService:
         trade = result["trade"]
         caption = f"✅ {side} confirmed | Seq #{trade['seq']}"
         if side == "SELL":
-            caption += f" | P/L: {result['realisedPnl']:+,} riel"
+            caption += f" | P/L: {format_money(result['realisedPnl'], trade.get('currency'), sign=True)}"
             if result["warning"]:
                 caption += "\n(Lot matching failed, but trade saved)"
             elif result["allocations"]:
@@ -234,7 +235,7 @@ class TelegramBotService:
         emoji = "\U0001F4C8" if realised >= 0 else "\U0001F4C9"
         self.client.send_photo(
             chat_id, img,
-            f"{emoji} {ticker} | P/L: {realised:+,} riel | Remaining: {total_bought - total_allocated}"
+            f"{emoji} {ticker} | P/L: {format_money(realised, 'KHR', sign=True)} | Remaining: {total_bought - total_allocated}"
         )
 
     def _portfolio(self, user_id: str, chat_id: int) -> None:
@@ -245,7 +246,7 @@ class TelegramBotService:
         total = sum(int(r.get("realisedPnl", 0)) + int(r.get("unrealisedPnl", 0)) for r in rows)
         emoji = "\U0001F4C8" if total >= 0 else "\U0001F4C9"
         self.client.send_photo(chat_id, self.renderer.portfolio_card(user_id, rows),
-                               f"{emoji} Portfolio | Total: {total:+,} riel")
+                               f"{emoji} Portfolio | Total: {format_money(total, 'KHR', sign=True)}")
 
     def _show_all(self, user_id: str, chat_id: int) -> None:
         stocks = self.pricing.get_all_prices()
