@@ -42,6 +42,9 @@ async def lifespan(app: FastAPI):
     # Price-alert checker (also a no-op unless the Telegram bot is configured).
     from app.services.alert_service import start_alert_scheduler
     start_alert_scheduler()
+    # Corporate-action applier (bonus/split on ex-date; same gate).
+    from app.services.corporate_action_service import start_corporate_action_scheduler
+    start_corporate_action_scheduler()
     yield
     logger.info("shutdown: fastapi app stopping")
 

@@ -219,6 +219,28 @@ def init_db(conn):
             );
         """)
 
+        # Corporate actions (bonus shares / splits): admin-entered per (market,
+        # symbol) with an ex-date; a daemon applies each one once to every
+        # holder's open lots (price ÷ m in place + a bonus BUY row dated at the
+        # ex-date). trades.corp_action_id marks rows created by an action, which
+        # is also the per-user resume guard for a half-applied action.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS corporate_actions (
+                action_id VARCHAR(100) PRIMARY KEY,
+                market VARCHAR(16) NOT NULL DEFAULT 'CSX',
+                symbol VARCHAR(50) NOT NULL,
+                action_type VARCHAR(16) NOT NULL,
+                ratio_new INTEGER NOT NULL,
+                ratio_held INTEGER NOT NULL,
+                ex_date DATE NOT NULL,
+                note TEXT,
+                created_by VARCHAR(100),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                applied_at TIMESTAMP
+            );
+        """)
+        cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS corp_action_id VARCHAR(100);")
+
         # AI Coach: one cached insight per user. snapshot_hash is the cache key —
         # a regenerate is skipped while the user's stats hash to the same value.
         # generated_at also backs the once-per-day refresh limit.

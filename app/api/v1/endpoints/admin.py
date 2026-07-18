@@ -2,8 +2,9 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import (get_user_repo, get_trade_repo, get_alloc_repo, get_current_user,
-                          require_admin, get_manual_price_repo)
-from app.schemas.admin import RoleUpdateRequest, AdminStats, ManualPriceRequest
+                          require_admin, get_manual_price_repo, get_corp_action_repo)
+from app.schemas.admin import (RoleUpdateRequest, AdminStats, ManualPriceRequest,
+                               CorporateActionCreate)
 from app.repositories.price_history import PriceHistoryRepository
 from app.services import markets
 
@@ -137,4 +138,78 @@ def get_admin_stats(
         )
     except Exception as e:
         logger.error(f"Error in get_admin_stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/corporate-actions")
+def list_corporate_actions(
+    _admin = Depends(require_admin),
+    action_repo = Depends(get_corp_action_repo)
+):
+    try:
+        items = action_repo.list_all()
+        for a in items:
+            a["exDate"] = a["exDate"].isoformat()
+            a["createdAt"] = a["createdAt"].isoformat() if a["createdAt"] else None
+            a["appliedAt"] = a["appliedAt"].isoformat() if a["appliedAt"] else None
+        return {"items": items}
+    except Exception as e:
+        logger.error(f"Error in list_corporate_actions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/corporate-actions")
+def create_corporate_action(
+    req: CorporateActionCreate,
+    current_user = Depends(get_current_user),
+    _admin = Depends(require_admin),
+    action_repo = Depends(get_corp_action_repo)
+):
+    """Register a bonus/split. The daemon applies it once the ex-date arrives;
+    nothing happens to anyone's lots at creation time."""
+    try:
+        from app.services.corporate_action_service import action_multiplier
+        symbol = req.symbol.strip().upper()
+        if not symbol:
+            raise HTTPException(status_code=400, detail="Symbol is required")
+        if req.ratioNew <= 0 or req.ratioHeld <= 0:
+            raise HTTPException(status_code=400, detail="Ratios must be positive integers")
+        market = markets.normalize_market(req.market)
+        probe = {"actionType": req.actionType, "ratioNew": req.ratioNew, "ratioHeld": req.ratioHeld}
+        if action_multiplier(probe) <= 1:
+            raise HTTPException(status_code=400,
+                                detail="Only bonus issues and forward splits (multiplier > 1) are supported")
+        created = action_repo.create(market, symbol, req.actionType, req.ratioNew,
+                                     req.ratioHeld, req.exDate, req.note, current_user.user_id)
+        created["exDate"] = created["exDate"].isoformat()
+        created["createdAt"] = created["createdAt"].isoformat() if created["createdAt"] else None
+        return {"success": True, "action": created}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in create_corporate_action: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/admin/corporate-actions/{action_id}")
+def delete_corporate_action(
+    action_id: str,
+    _admin = Depends(require_admin),
+    action_repo = Depends(get_corp_action_repo)
+):
+    """Unapplied actions only — an applied one already rewrote lots and must
+    remain as the audit record (409)."""
+    try:
+        existing = action_repo.get(action_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Corporate action not found")
+        if existing["appliedAt"] is not None:
+            raise HTTPException(status_code=409, detail="Already applied; cannot delete")
+        if not action_repo.delete(action_id):
+            raise HTTPException(status_code=409, detail="Already applied; cannot delete")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in delete_corporate_action: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

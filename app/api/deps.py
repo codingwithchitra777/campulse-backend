@@ -9,6 +9,7 @@ from app.repositories.manual_price import ManualPriceRepository
 from app.repositories.watchlist import WatchlistRepository
 from app.repositories.alert import AlertRepository
 from app.repositories.ai_insight import AIInsightRepository
+from app.repositories.corporate_action import CorporateActionRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.price_providers import price_router
@@ -77,6 +78,9 @@ def get_analytics_service():
 
 def get_ai_insight_repo() -> AIInsightRepository:
     return AIInsightRepository()
+
+def get_corp_action_repo() -> CorporateActionRepository:
+    return CorporateActionRepository()
 
 def get_ai_coach_service():
     from app.services.ai_coach import AICoachService

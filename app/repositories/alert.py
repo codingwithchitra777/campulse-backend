@@ -47,6 +47,28 @@ class AlertRepository:
                     for r in cur.fetchall()
                 ]
 
+    def rescale_targets(self, market: str, symbol: str, multiplier) -> List[Dict[str, Any]]:
+        """Divide active alerts' targets by the corporate-action multiplier so a
+        1:1 bonus doesn't turn "below 2,000" into a false crash ping. Returns the
+        affected alerts (old + new target) so the caller can notify each owner."""
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE price_alerts
+                    SET target_price = ROUND(target_price / %s, 4)
+                    WHERE active = TRUE AND market = %s AND symbol = %s
+                    RETURNING alert_id, user_id, symbol, currency,
+                              ROUND(target_price * %s, 4), target_price
+                    """,
+                    (multiplier, market, symbol.upper(), multiplier)
+                )
+                return [
+                    {"alertId": r[0], "userId": r[1], "symbol": r[2], "currency": r[3],
+                     "oldTarget": r[4], "newTarget": r[5]}
+                    for r in cur.fetchall()
+                ]
+
     def remove(self, alert_id: str, user_id: str) -> bool:
         with get_db() as conn:
             with conn.cursor() as cur:

@@ -67,7 +67,7 @@ class TradeRepository:
     ) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
-                query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency, note, tags FROM trades WHERE user_id = %s"
+                query = "SELECT trade_id, user_id, seq, ticker, side, price, qty, commission, order_date, market, currency, note, tags, corp_action_id FROM trades WHERE user_id = %s"
                 params = [user_id]
                 if ticker:
                      query += " AND ticker = %s"
@@ -95,7 +95,8 @@ class TradeRepository:
                          "market": r[9],
                          "currency": r[10],
                          "note": r[11],
-                         "tags": r[12]
+                         "tags": r[12],
+                         "corpActionId": r[13]
                      }
                      for r in rows
                 ]

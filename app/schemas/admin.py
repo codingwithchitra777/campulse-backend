@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Literal, Optional
 from decimal import Decimal
+from datetime import date
 
 Role = Literal["user", "admin"]
 
@@ -11,6 +12,19 @@ class AdminStats(BaseModel):
     totalUsers: int
     totalTrades: int
     totalRealisedPnl: float
+
+class CorporateActionCreate(BaseModel):
+    """A bonus issue or forward split: ratioNew new shares per ratioHeld held
+    (PPSP 1:1 bonus => ratioNew=1, ratioHeld=1). Applied to every holder's open
+    lots on exDate by the corporate-action daemon."""
+    market: str = "CSX"
+    symbol: str
+    actionType: Literal["bonus", "split"]
+    ratioNew: int
+    ratioHeld: int
+    exDate: date
+    note: Optional[str] = None
+
 
 class ManualPriceRequest(BaseModel):
     """Set the admin board price for a manually-priced instrument (local gold).
