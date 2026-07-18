@@ -129,7 +129,7 @@ class TradeRepository:
                      for r in rows
                 ]
 
-    def count_trades(self, user_id: Optional[str] = None, ticker: Optional[str] = None) -> int:
+    def count_trades(self, user_id: Optional[str] = None, ticker: Optional[str] = None, market: Optional[str] = None) -> int:
         with get_db() as conn:
             with conn.cursor() as cur:
                 query = "SELECT COUNT(*) FROM trades"
@@ -141,6 +141,9 @@ class TradeRepository:
                 if ticker:
                     clauses.append("ticker = %s")
                     params.append(ticker)
+                if market:
+                    clauses.append("market = %s")
+                    params.append(market)
                 if clauses:
                     query += " WHERE " + " AND ".join(clauses)
                 cur.execute(query, tuple(params))

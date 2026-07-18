@@ -45,6 +45,9 @@ async def lifespan(app: FastAPI):
     # Corporate-action applier (bonus/split on ex-date; same gate).
     from app.services.corporate_action_service import start_corporate_action_scheduler
     start_corporate_action_scheduler()
+    # Loan due-date reminders (same gate).
+    from app.services.loan_service import start_loan_reminder_scheduler
+    start_loan_reminder_scheduler()
     yield
     logger.info("shutdown: fastapi app stopping")
 

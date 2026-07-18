@@ -269,3 +269,38 @@ def init_db(conn):
                 PRIMARY KEY (market, symbol)
             );
         """)
+
+        # Personal loan ledger — money the user lent to / borrowed from a person.
+        # Entirely separate from trading: never touches P/L, holdings, or the
+        # equity curve. direction 'lent' = they owe me, 'borrowed' = I owe them.
+        # status is a derived cache (open|partial|settled), recomputed whenever a
+        # repayment is added/removed; outstanding = principal - Σ repayments.
+        # last_reminded_date guards the due-date Telegram reminder to once a day.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS loans (
+                loan_id VARCHAR(100) PRIMARY KEY,
+                user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                direction VARCHAR(10) NOT NULL,
+                counterparty VARCHAR(255) NOT NULL,
+                principal NUMERIC(20, 4) NOT NULL,
+                currency VARCHAR(8) NOT NULL DEFAULT 'KHR',
+                loan_date DATE NOT NULL,
+                due_date DATE,
+                note TEXT,
+                status VARCHAR(10) NOT NULL DEFAULT 'open',
+                last_reminded_date DATE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_user ON loans(user_id);")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS loan_repayments (
+                repayment_id VARCHAR(100) PRIMARY KEY,
+                loan_id VARCHAR(100) NOT NULL REFERENCES loans(loan_id) ON DELETE CASCADE,
+                amount NUMERIC(20, 4) NOT NULL,
+                paid_date DATE NOT NULL,
+                note TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_loan_repayments_loan ON loan_repayments(loan_id);")

@@ -32,6 +32,7 @@ def serialize_allocation(a):
 def get_trades(
     current_user = Depends(get_current_user),
     ticker: Optional[str] = None,
+    market: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     trade_repo = Depends(get_trade_repo)
@@ -39,11 +40,11 @@ def get_trades(
     try:
         ticker_filter = ticker.upper() if ticker else None
         trades = trade_repo.list_trades(
-            current_user.user_id, ticker_filter, limit=limit, offset=offset
+            current_user.user_id, ticker_filter, limit=limit, offset=offset, market=market
         )
         return {
             "items": [serialize_trade(t) for t in trades],
-            "total": trade_repo.count_trades(current_user.user_id, ticker_filter),
+            "total": trade_repo.count_trades(current_user.user_id, ticker_filter, market=market),
             "limit": limit,
             "offset": offset
         }
