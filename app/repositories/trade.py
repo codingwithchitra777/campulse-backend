@@ -63,7 +63,8 @@ class TradeRepository:
         ticker: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
-        market: Optional[str] = None
+        market: Optional[str] = None,
+        sort_desc: bool = False
     ) -> List[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -75,7 +76,12 @@ class TradeRepository:
                 if market:
                      query += " AND market = %s"
                      params.append(market)
-                query += " ORDER BY order_date DESC, seq DESC"
+                
+                if sort_desc:
+                     query += " ORDER BY order_date DESC, seq DESC"
+                else:
+                     query += " ORDER BY order_date ASC, seq ASC"
+                     
                 if limit is not None:
                      query += " LIMIT %s OFFSET %s"
                      params.extend([limit, offset])

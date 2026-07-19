@@ -44,7 +44,7 @@ def get_trades(
             
         ticker_filter = ticker.upper() if ticker else None
         trades = trade_repo.list_trades(
-            current_user.user_id, ticker_filter, limit=limit, offset=offset, market=market
+            current_user.user_id, ticker_filter, limit=limit, offset=offset, market=market, sort_desc=True
         )
         return {
             "items": [serialize_trade(t) for t in trades],
