@@ -60,18 +60,22 @@ _SELECT = """
 class LoanRepository:
     def create(self, user_id: str, direction: str, counterparty: str,
                principal: Decimal, currency: str, loan_date: date,
-               due_date: Optional[date], note: Optional[str]) -> Dict[str, Any]:
+               due_date: Optional[date], note: Optional[str],
+               rate_pct: Optional[Decimal] = None, rate_period: Optional[str] = None,
+               term_months: Optional[int] = None, method: Optional[str] = None,
+               fixed_payment: Optional[Decimal] = None) -> Dict[str, Any]:
         loan_id = str(uuid.uuid4())
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
                     INSERT INTO loans (loan_id, user_id, direction, counterparty,
-                                       principal, currency, loan_date, due_date, note, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'open')
+                                       principal, currency, loan_date, due_date, note, status,
+                                       rate_pct, rate_period, term_months, method, fixed_payment)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', %s, %s, %s, %s, %s)
                     """,
                     (loan_id, user_id, direction, counterparty, principal, currency,
-                     loan_date, due_date, note)
+                     loan_date, due_date, note, rate_pct, rate_period, term_months, method, fixed_payment)
                 )
         return self.get(loan_id, user_id)
 
