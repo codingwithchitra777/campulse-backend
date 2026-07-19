@@ -26,6 +26,7 @@ def _login_response(user_repo, link_repo, raw_user_id: str, name: str,
         "userName": primary["userName"],
         "email": primary.get("email"),
         "role": primary["role"],
+        "marketOverviewEnabled": primary.get("market_overview_enabled", True),
     }
 
 
@@ -112,7 +113,8 @@ def auth_demo(payload: DemoAuthRequest, user_repo = Depends(get_user_repo)):
             "userId": payload.userId,
             "userName": payload.userName,
             "email": None,
-            "role": user["role"]
+            "role": user["role"],
+            "marketOverviewEnabled": user.get("market_overview_enabled", True)
         }
     except Exception as e:
         logger.error(f"Error in demo auth: {e}", exc_info=True)

@@ -22,7 +22,7 @@ class UserRepository:
     def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT user_id, user_name, register_date, chat_id, role, email FROM users WHERE user_id = %s", (user_id,))
+                cur.execute("SELECT user_id, user_name, register_date, chat_id, role, email, market_overview_enabled FROM users WHERE user_id = %s", (user_id,))
                 row = cur.fetchone()
                 if not row:
                      return None
@@ -32,8 +32,17 @@ class UserRepository:
                      "registerDate": row[2],
                      "chat_id": row[3],
                      "role": row[4],
-                     "email": row[5]
+                     "email": row[5],
+                     "market_overview_enabled": row[6]
                 }
+
+    def update_market_overview(self, user_id: str, enabled: bool) -> None:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET market_overview_enabled = %s WHERE user_id = %s",
+                    (enabled, user_id)
+                )
 
     def update_role(self, user_id: str, role: str) -> Optional[Dict[str, Any]]:
         with get_db() as conn:
@@ -60,7 +69,7 @@ class UserRepository:
         with get_db() as conn:
             with conn.cursor() as cur:
                  cur.execute(
-                     "SELECT user_id, user_name, register_date, chat_id, role FROM users "
+                     "SELECT user_id, user_name, register_date, chat_id, role, market_overview_enabled FROM users "
                      "ORDER BY register_date DESC LIMIT %s OFFSET %s",
                      (limit, offset)
                  )
@@ -71,7 +80,8 @@ class UserRepository:
                          "userName": r[1],
                          "registerDate": r[2],
                          "chat_id": r[3],
-                         "role": r[4]
+                         "role": r[4],
+                         "market_overview_enabled": r[5]
                      }
                      for r in rows
                  ]

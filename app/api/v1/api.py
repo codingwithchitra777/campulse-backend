@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import admin, ai, alerts, auth, deploy, link, loans, market, portfolio, telegram, trade, watchlist
+from app.api.v1.endpoints import admin, ai, alerts, auth, deploy, link, loans, market, portfolio, telegram, trade, watchlist, settings, market_events
 
 api_router = APIRouter()
 api_router.include_router(admin.router)
@@ -14,3 +14,5 @@ api_router.include_router(portfolio.router)
 api_router.include_router(telegram.router)
 api_router.include_router(trade.router)
 api_router.include_router(watchlist.router)
+api_router.include_router(settings.router)
+api_router.include_router(market_events.router)

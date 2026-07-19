@@ -65,6 +65,10 @@ def init_db(conn):
         cur.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';
         """)
+        # Market overview broadcast preference
+        cur.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS market_overview_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+        """)
         # Email captured from Google login (Telegram provides none). Nullable.
         cur.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
@@ -240,6 +244,20 @@ def init_db(conn):
             );
         """)
         cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS corp_action_id VARCHAR(100);")
+
+        # Market Events (Holidays, Dividends) booked by admin for the Calendar
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS market_events (
+                event_id VARCHAR(100) PRIMARY KEY,
+                market VARCHAR(16) NOT NULL DEFAULT 'CSX',
+                event_type VARCHAR(20) NOT NULL, -- 'holiday' or 'dividend'
+                symbol VARCHAR(50), -- null for holiday
+                event_date DATE NOT NULL,
+                description TEXT,
+                created_by VARCHAR(100),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
 
         # AI Coach: one cached insight per user. snapshot_hash is the cache key —
         # a regenerate is skipped while the user's stats hash to the same value.

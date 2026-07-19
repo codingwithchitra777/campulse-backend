@@ -80,8 +80,13 @@ def get_analytics_service():
 def get_ai_insight_repo() -> AIInsightRepository:
     return AIInsightRepository()
 
+from app.repositories.market_event import MarketEventRepository
+
 def get_corp_action_repo() -> CorporateActionRepository:
     return CorporateActionRepository()
+
+def get_market_event_repo() -> MarketEventRepository:
+    return MarketEventRepository()
 
 def get_loan_repo() -> LoanRepository:
     return LoanRepository()

@@ -330,7 +330,7 @@ class TelegramBotService:
                 break
             for u in batch:
                 cid = u.get("chat_id")
-                if cid:
+                if cid and u.get("market_overview_enabled", True):
                     try:
                         if file_id:
                             self.client.send_photo(int(cid), file_id, caption)
