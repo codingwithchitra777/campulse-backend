@@ -38,6 +38,10 @@ def get_trades(
     trade_repo = Depends(get_trade_repo)
 ):
     try:
+        # Enforce business logic: Ticker filter is only applicable to CSX market
+        if market != "CSX":
+            ticker = None
+            
         ticker_filter = ticker.upper() if ticker else None
         trades = trade_repo.list_trades(
             current_user.user_id, ticker_filter, limit=limit, offset=offset, market=market
