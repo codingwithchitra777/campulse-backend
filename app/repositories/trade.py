@@ -75,7 +75,7 @@ class TradeRepository:
                 if market:
                      query += " AND market = %s"
                      params.append(market)
-                query += " ORDER BY order_date ASC, seq ASC"
+                query += " ORDER BY order_date DESC, seq DESC"
                 if limit is not None:
                      query += " LIMIT %s OFFSET %s"
                      params.extend([limit, offset])
