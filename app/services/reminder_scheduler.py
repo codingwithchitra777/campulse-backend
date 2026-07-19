@@ -34,6 +34,11 @@ def _seconds_until_next(now: datetime):
         target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if target <= now:
             target += timedelta(days=1)
+            
+        # Skip weekends (5=Saturday, 6=Sunday)
+        while target.weekday() >= 5:
+            target += timedelta(days=1)
+            
         delay = (target - now).total_seconds()
         if best is None or delay < best[0]:
             best = (delay, text)

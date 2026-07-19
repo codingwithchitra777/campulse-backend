@@ -39,7 +39,7 @@ def get_trades(
 ):
     try:
         # Enforce business logic: Ticker filter is only applicable to CSX market
-        if market != "CSX":
+        if market and market not in ("CSX", "ALL"):
             ticker = None
             
         ticker_filter = ticker.upper() if ticker else None

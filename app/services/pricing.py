@@ -86,7 +86,11 @@ class PricingService:
     def snapshot_prices(self, prices: List[dict]) -> None:
         """Upsert one price_history row per ticker for today's Phnom Penh
         trading date. DB errors are logged, never propagated to the loop."""
-        snapshot_date = datetime.now(PHNOM_PENH_TZ).date()
+        now = datetime.now(PHNOM_PENH_TZ)
+        if now.weekday() >= 5:  # Saturday or Sunday
+            return
+            
+        snapshot_date = now.date()
         date_str = snapshot_date.strftime("%Y-%m-%d")
         repo = PriceHistoryRepository()
         redis_service = RedisService()
