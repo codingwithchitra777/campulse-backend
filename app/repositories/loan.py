@@ -37,6 +37,11 @@ def _loan_row(r) -> Dict[str, Any]:
         "repaid": repaid,
         # Floor at 0 for display: an over-payment shouldn't read as negative debt.
         "outstanding": outstanding if outstanding > 0 else Decimal(0),
+        "ratePct": r[12],
+        "ratePeriod": r[13],
+        "termMonths": r[14],
+        "method": r[15],
+        "fixedPayment": r[16] if len(r) > 16 else None,
     }
 
 
@@ -44,7 +49,8 @@ def _loan_row(r) -> Dict[str, Any]:
 _SELECT = """
     SELECT l.loan_id, l.direction, l.counterparty, l.currency, l.principal,
            l.loan_date, l.due_date, l.note, l.status, l.created_at, l.user_id,
-           COALESCE(r.repaid, 0)
+           COALESCE(r.repaid, 0),
+           l.rate_pct, l.rate_period, l.term_months, l.method, l.fixed_payment
     FROM loans l
     LEFT JOIN (SELECT loan_id, SUM(amount) AS repaid
                FROM loan_repayments GROUP BY loan_id) r ON r.loan_id = l.loan_id

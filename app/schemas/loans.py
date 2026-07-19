@@ -13,6 +13,11 @@ class LoanCreate(BaseModel):
     loanDate: Optional[date] = None         # omitted => today
     dueDate: Optional[date] = None
     note: Optional[str] = None
+    ratePct: Optional[Decimal] = None
+    ratePeriod: Optional[str] = None
+    termMonths: Optional[int] = None
+    method: Optional[str] = None
+    fixedPayment: Optional[Decimal] = None
 
 
 class RepaymentCreate(BaseModel):

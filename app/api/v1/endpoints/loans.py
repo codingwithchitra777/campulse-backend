@@ -75,7 +75,8 @@ def create_loan(
         if req.dueDate and req.dueDate < loan_date:
             raise HTTPException(status_code=400, detail="Due date is before the loan date")
         loan = loan_repo.create(current_user.user_id, req.direction, counterparty,
-                                req.principal, currency, loan_date, req.dueDate, req.note)
+                                req.principal, currency, loan_date, req.dueDate, req.note,
+                                req.ratePct, req.ratePeriod, req.termMonths, req.method, req.fixedPayment)
         return {"success": True, "loan": loan}
     except HTTPException:
         raise

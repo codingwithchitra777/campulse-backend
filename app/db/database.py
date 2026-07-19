@@ -295,7 +295,7 @@ def init_db(conn):
         # repayment is added/removed; outstanding = principal - Σ repayments.
         # last_reminded_date guards the due-date Telegram reminder to once a day.
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS loans (
+                        CREATE TABLE IF NOT EXISTS loans (
                 loan_id VARCHAR(100) PRIMARY KEY,
                 user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                 direction VARCHAR(10) NOT NULL,
@@ -307,9 +307,25 @@ def init_db(conn):
                 note TEXT,
                 status VARCHAR(10) NOT NULL DEFAULT 'open',
                 last_reminded_date DATE,
+                rate_pct NUMERIC(10, 4),
+                rate_period VARCHAR(10),
+                term_months INTEGER,
+                method VARCHAR(20),
+                fixed_payment NUMERIC(20, 4),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        
+        # Migration: Add calculation columns to loans
+        try:
+            cur.execute("ALTER TABLE loans ADD COLUMN rate_pct NUMERIC(10, 4);")
+            cur.execute("ALTER TABLE loans ADD COLUMN rate_period VARCHAR(10);")
+            cur.execute("ALTER TABLE loans ADD COLUMN term_months INTEGER;")
+            cur.execute("ALTER TABLE loans ADD COLUMN method VARCHAR(20);")
+            cur.execute("ALTER TABLE loans ADD COLUMN fixed_payment NUMERIC(20, 4);")
+        except Exception:
+            pass # columns already exist
+
         cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_user ON loans(user_id);")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS loan_repayments (
