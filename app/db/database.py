@@ -34,7 +34,8 @@ def get_pool():
                     finally:
                         _pool.putconn(conn)
                 except Exception as e:
-                    logger.critical(f"Failed to create connection pool: {e}", exc_info=True)
+                    _pool = None
+                    logger.critical(f"Failed to create connection pool or init db: {e}", exc_info=True)
                     raise
     return _pool
 
@@ -332,14 +333,18 @@ def init_db(conn):
         """)
         
         # Migration: Add calculation columns to loans
-        try:
-            cur.execute("ALTER TABLE loans ADD COLUMN rate_pct NUMERIC(10, 4);")
-            cur.execute("ALTER TABLE loans ADD COLUMN rate_period VARCHAR(10);")
-            cur.execute("ALTER TABLE loans ADD COLUMN term_months INTEGER;")
-            cur.execute("ALTER TABLE loans ADD COLUMN method VARCHAR(20);")
-            cur.execute("ALTER TABLE loans ADD COLUMN fixed_payment NUMERIC(20, 4);")
-        except Exception:
-            pass # columns already exist
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loans' AND column_name = 'rate_pct') THEN
+                    ALTER TABLE loans ADD COLUMN rate_pct NUMERIC(10, 4);
+                    ALTER TABLE loans ADD COLUMN rate_period VARCHAR(10);
+                    ALTER TABLE loans ADD COLUMN term_months INTEGER;
+                    ALTER TABLE loans ADD COLUMN method VARCHAR(20);
+                    ALTER TABLE loans ADD COLUMN fixed_payment NUMERIC(20, 4);
+                END IF;
+            END $$;
+        """)
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_user ON loans(user_id);")
         cur.execute("""
