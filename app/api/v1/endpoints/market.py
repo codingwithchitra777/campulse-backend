@@ -197,3 +197,19 @@ def get_exchange_rate_history(
     except Exception as e:
         logger.error(f"Error in get_exchange_rate_history: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/market/price-history/{symbol}")
+def get_price_history(
+    symbol: str,
+    days: int = Query(default=30, ge=1, le=365)
+):
+    try:
+        from app.repositories.price_history import PriceHistoryRepository
+        hist = PriceHistoryRepository().get_history_days(days)
+        # Filter for just this symbol
+        symbol = symbol.upper()
+        symbol_hist = [h for h in hist if h["ticker"] == symbol]
+        return {"items": symbol_hist}
+    except Exception as e:
+        logger.error(f"Error in get_price_history: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

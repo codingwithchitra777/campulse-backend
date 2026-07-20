@@ -154,7 +154,9 @@ def init_db(conn):
             CREATE TABLE IF NOT EXISTS price_history (
                 ticker VARCHAR(50) NOT NULL,
                 snapshot_date DATE NOT NULL,
-                price INT NOT NULL,
+                price NUMERIC(20, 4) NOT NULL,
+                bid_price NUMERIC(20, 4),
+                ask_price NUMERIC(20, 4),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (ticker, snapshot_date)
             );
@@ -281,6 +283,8 @@ def init_db(conn):
                 market VARCHAR(16) NOT NULL,
                 symbol VARCHAR(50) NOT NULL,
                 price NUMERIC(20, 4) NOT NULL,
+                bid_price NUMERIC(20, 4),
+                ask_price NUMERIC(20, 4),
                 currency VARCHAR(8) NOT NULL DEFAULT 'USD',
                 change NUMERIC(20, 4) NOT NULL DEFAULT 0,
                 updated_by VARCHAR(100),
@@ -342,6 +346,14 @@ def init_db(conn):
                     ALTER TABLE loans ADD COLUMN term_months INTEGER;
                     ALTER TABLE loans ADD COLUMN method VARCHAR(20);
                     ALTER TABLE loans ADD COLUMN fixed_payment NUMERIC(20, 4);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'manual_prices' AND column_name = 'bid_price') THEN
+                    ALTER TABLE manual_prices ADD COLUMN bid_price NUMERIC(20, 4);
+                    ALTER TABLE manual_prices ADD COLUMN ask_price NUMERIC(20, 4);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'price_history' AND column_name = 'bid_price') THEN
+                    ALTER TABLE price_history ADD COLUMN bid_price NUMERIC(20, 4);
+                    ALTER TABLE price_history ADD COLUMN ask_price NUMERIC(20, 4);
                 END IF;
             END $$;
         """)

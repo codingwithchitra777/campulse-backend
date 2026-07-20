@@ -102,7 +102,12 @@ class PortfolioService:
         for ticker in sorted(meta):
             market, currency = meta[ticker]
             price_res = self.price_router.get_latest_price(market, ticker)
-            last_price = Decimal(str(price_res.price)) if price_res.price is not None else None
+            
+            last_price = None
+            if price_res.price is not None:
+                # If a bid price exists (e.g. Gold), use it for valuation as this is the sell value.
+                bid = price_res.raw.get("bidPrice") if price_res.raw else None
+                last_price = Decimal(str(bid)) if bid is not None else Decimal(str(price_res.price))
 
             pos = self.position_detail(user_id, ticker, market=market)
             realised = self.realised_pnl(user_id, ticker, market=market)
@@ -246,7 +251,8 @@ class PortfolioService:
 
         hist_by_date: Dict[str, Dict[str, int]] = defaultdict(dict)
         for h in history:
-            hist_by_date[h["date"]][h["ticker"]] = h["price"]
+            # Prefer bid price if it exists for accurate liquidation value.
+            hist_by_date[h["date"]][h["ticker"]] = h.get("bidPrice") if h.get("bidPrice") is not None else h["price"]
 
         def convert_val(amount, trade_currency):
             if not amount or trade_currency == target_currency:

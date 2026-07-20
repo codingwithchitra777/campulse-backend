@@ -30,6 +30,8 @@ class ManualPriceRequest(BaseModel):
     """Set the admin board price for a manually-priced instrument (local gold).
     Defaults target the single local-gold instrument, XAU-KH in USD per chi."""
     price: Decimal
+    bidPrice: Optional[Decimal] = None
+    askPrice: Optional[Decimal] = None
     market: str = "GOLD_KH"
     symbol: str = "XAU-KH"
     currency: str = "USD"

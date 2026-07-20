@@ -107,11 +107,17 @@ def set_manual_price(
         if req.price <= 0:
             raise HTTPException(status_code=400, detail="Price must be positive")
         symbol = req.symbol.upper()
-        manual_repo.upsert(market, symbol, req.price, currency=req.currency.upper(),
-                           change=req.change, updated_by=current_user.user_id)
+        manual_repo.upsert(
+            market, symbol, req.price, currency=req.currency.upper(),
+            change=req.change, updated_by=current_user.user_id,
+            bid_price=req.bidPrice, ask_price=req.askPrice
+        )
         # Daily snapshot for the equity series (best-effort).
         try:
-            PriceHistoryRepository().upsert_snapshot(symbol, datetime.utcnow().date(), req.price, market=market)
+            PriceHistoryRepository().upsert_snapshot(
+                symbol, datetime.utcnow().date(), req.price, market=market,
+                bid_price=req.bidPrice, ask_price=req.askPrice
+            )
         except Exception as snap_err:
             logger.warning(f"manual-price snapshot failed for {symbol}: {snap_err}")
         return {"success": True, "market": market, "symbol": symbol,
