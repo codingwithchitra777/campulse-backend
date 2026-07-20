@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.services.portfolio import PortfolioService
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
-from app.api.deps import get_portfolio_service, get_trade_repo, get_alloc_repo, get_current_user, get_analytics_service
+from app.api.deps import get_portfolio_service, get_trade_repo, get_alloc_repo, get_current_user, get_analytics_service, get_exchange_rate_repo
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -125,11 +125,15 @@ def get_pnl_yearly(
 
 @router.get("/charts/timeline")
 def get_charts_timeline(
+    market: Optional[str] = None,
+    targetCurrency: str = "KHR",
     current_user = Depends(get_current_user),
-    portfolio_service = Depends(get_portfolio_service)
+    portfolio_service = Depends(get_portfolio_service),
+    rate_repo = Depends(get_exchange_rate_repo)
 ):
     try:
-        return portfolio_service.chart_timeline(current_user.user_id)
+        rate = rate_repo.get_latest_rate('USD', 'KHR')
+        return portfolio_service.chart_timeline(current_user.user_id, market, targetCurrency, rate)
     except Exception as e:
         logger.error(f"Error in get_charts_timeline: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

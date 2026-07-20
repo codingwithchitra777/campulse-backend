@@ -165,47 +165,75 @@ class PortfolioService:
             y["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
         return out
 
-    def chart_timeline(self, user_id: str) -> Dict[str, Any]:
+    def chart_timeline(self, user_id: str, market: Optional[str] = None, target_currency: str = "KHR", rate: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Per-day cumulative series for the Reports charts: money invested vs
         recovered (from the trade ledger) and running realized P/L (allocations
         keyed to the SELL trade's order date, like realised_pnl_by_year)."""
-        trades = self.trade_repo.list_trades(user_id)
+        trades = self.trade_repo.list_trades(user_id, market=market)
+
+        def convert_val(amount, trade_currency):
+            if not amount or trade_currency == target_currency:
+                return amount
+            if not rate:
+                return amount
+            
+            # rate is always USD base, KHR target
+            # if we have USD and want KHR -> sell USD -> bid_rate
+            if trade_currency == 'USD' and target_currency == 'KHR':
+                return amount * Decimal(rate['bidRate'])
+            # if we have KHR and want USD -> buy USD -> ask_rate
+            if trade_currency == 'KHR' and target_currency == 'USD':
+                return amount / Decimal(rate['askRate'])
+            return amount
 
         investment: List[Dict[str, Any]] = []
-        invested = 0
-        recovered = 0
+        invested = Decimal(0)
+        recovered = Decimal(0)
         for t in trades:
+            t_curr = t.get("currency", "KHR")
+            val = Decimal(t["price"]) * Decimal(t["qty"])
+            comm = Decimal(t.get("commission", 0) or 0)
+            
             if t["side"] == "BUY":
-                invested += int(t["price"]) * int(t["qty"]) + int(t.get("commission", 0))
+                invested += convert_val(val + comm, t_curr)
             else:
-                recovered += int(t["price"]) * int(t["qty"]) - int(t.get("commission", 0))
+                recovered += convert_val(val - comm, t_curr)
+                
             day = t["orderDate"].date().isoformat()
             if investment and investment[-1]["date"] == day:
-                investment[-1]["invested"] = invested
-                investment[-1]["recovered"] = recovered
+                investment[-1]["invested"] = float(invested)
+                investment[-1]["recovered"] = float(recovered)
             else:
-                investment.append({"date": day, "invested": invested, "recovered": recovered})
+                investment.append({"date": day, "invested": float(invested), "recovered": float(recovered)})
 
-        order_date_by_trade = {t["tradeId"]: t["orderDate"] for t in trades}
-        allocs = self.alloc_repo.list_allocations(user_id)
-        events = sorted(
-            (order_date_by_trade.get(a["sellTradeId"], a["createdAt"]), int(a["realisedPnl"]))
-            for a in allocs
-        )
+        order_date_by_trade = {t["tradeId"]: (t["orderDate"], t.get("currency", "KHR")) for t in trades}
+        allocs = self.alloc_repo.list_allocations(user_id, market=market)
+        
+        events = []
+        for a in allocs:
+            order_info = order_date_by_trade.get(a["sellTradeId"])
+            if order_info:
+                dt, curr = order_info
+                events.append((dt, convert_val(Decimal(a["realisedPnl"]), curr)))
+            else:
+                # Fallback if somehow not in trades
+                events.append((a["createdAt"], convert_val(Decimal(a["realisedPnl"]), "KHR")))
+
+        events.sort(key=lambda x: x[0])
 
         pnl: List[Dict[str, Any]] = []
-        cumulative = 0
+        cumulative = Decimal(0)
         for when, realised in events:
             cumulative += realised
             day = when.date().isoformat()
             if pnl and pnl[-1]["date"] == day:
-                pnl[-1]["cumulativePnl"] = cumulative
+                pnl[-1]["cumulativePnl"] = float(cumulative)
             else:
-                pnl.append({"date": day, "cumulativePnl": cumulative})
+                pnl.append({"date": day, "cumulativePnl": float(cumulative)})
 
-        return {"investment": investment, "pnl": pnl, "equity": self._equity_series(trades)}
+        return {"investment": investment, "pnl": pnl, "equity": self._equity_series(trades, target_currency, rate)}
 
-    def _equity_series(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _equity_series(self, trades: List[Dict[str, Any]], target_currency: str, rate: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Market value of open holdings on each snapshotted trading day.
         Prices forward-fill between snapshots; a ticker with no snapshot yet
         falls back to its most recent trade price (cost)."""
@@ -220,8 +248,20 @@ class PortfolioService:
         for h in history:
             hist_by_date[h["date"]][h["ticker"]] = h["price"]
 
+        def convert_val(amount, trade_currency):
+            if not amount or trade_currency == target_currency:
+                return amount
+            if not rate:
+                return amount
+            if trade_currency == 'USD' and target_currency == 'KHR':
+                return amount * Decimal(rate['bidRate'])
+            if trade_currency == 'KHR' and target_currency == 'USD':
+                return amount / Decimal(rate['askRate'])
+            return amount
+
         holdings: Dict[str, int] = defaultdict(int)
         last_trade_price: Dict[str, int] = {}
+        trade_currency: Dict[str, str] = {}
         last_snap_price: Dict[str, int] = {}
         equity: List[Dict[str, Any]] = []
         ti = 0
@@ -231,16 +271,18 @@ class PortfolioService:
                 qty = int(t["qty"])
                 holdings[t["ticker"]] += qty if t["side"] == "BUY" else -qty
                 last_trade_price[t["ticker"]] = Decimal(t["price"])
+                trade_currency[t["ticker"]] = t.get("currency", "KHR")
                 ti += 1
             last_snap_price.update(hist_by_date[day])
             if ti == 0:
                 continue  # snapshot predates the first trade
-            value = 0
+            value = Decimal(0)
             for ticker, qty in holdings.items():
                 if qty <= 0:
                     continue
-                value += qty * last_snap_price.get(ticker, last_trade_price.get(ticker, 0))
-            equity.append({"date": day, "value": int(value)})
+                p = last_snap_price.get(ticker, last_trade_price.get(ticker, 0))
+                value += convert_val(Decimal(p) * Decimal(qty), trade_currency.get(ticker, "KHR"))
+            equity.append({"date": day, "value": float(value)})
         return equity
 
     def top_profitable_tickers(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
