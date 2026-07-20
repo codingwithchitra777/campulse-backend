@@ -34,3 +34,10 @@ class ManualPriceRequest(BaseModel):
     symbol: str = "XAU-KH"
     currency: str = "USD"
     change: Decimal = Decimal(0)
+
+class ExchangeRateCreate(BaseModel):
+    baseCurrency: str = "USD"
+    targetCurrency: str = "KHR"
+    bidRate: float
+    askRate: float
+    effectiveDate: date

@@ -288,6 +288,21 @@ def init_db(conn):
             );
         """)
 
+        # Exchange Rates (e.g. USD to KHR) for portfolio currency conversion
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS exchange_rates (
+                id VARCHAR(100) PRIMARY KEY,
+                base_currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+                target_currency VARCHAR(8) NOT NULL DEFAULT 'KHR',
+                bid_rate NUMERIC(20, 4) NOT NULL,
+                ask_rate NUMERIC(20, 4) NOT NULL,
+                effective_date DATE NOT NULL,
+                created_by VARCHAR(100),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (base_currency, target_currency, effective_date)
+            );
+        """)
+
         # Personal loan ledger — money the user lent to / borrowed from a person.
         # Entirely separate from trading: never touches P/L, holdings, or the
         # equity curve. direction 'lent' = they owe me, 'borrowed' = I owe them.

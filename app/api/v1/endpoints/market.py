@@ -11,7 +11,7 @@ from app.repositories.allocation import AllocationRepository
 from app.services.portfolio import PortfolioService
 from app.services.redis_service import RedisService
 from app.utils.chart_renderer import ChartRenderer
-from app.api.deps import get_pricing_service, get_trade_repo, get_alloc_repo, get_portfolio_service, get_price_router
+from app.api.deps import get_pricing_service, get_trade_repo, get_alloc_repo, get_portfolio_service, get_price_router, get_exchange_rate_repo
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -169,4 +169,31 @@ def get_chart(
         chart_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "demo_stock_chart.png"))
         if os.path.exists(chart_path):
             return FileResponse(chart_path, media_type="image/png")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/market/exchange-rates/latest")
+def get_latest_exchange_rate(
+    baseCurrency: str = Query("USD"),
+    targetCurrency: str = Query("KHR"),
+    rate_repo = Depends(get_exchange_rate_repo)
+):
+    try:
+        rate = rate_repo.get_latest_rate(baseCurrency, targetCurrency)
+        return {"rate": rate}
+    except Exception as e:
+        logger.error(f"Error in get_latest_exchange_rate: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/market/exchange-rates/history")
+def get_exchange_rate_history(
+    baseCurrency: str = Query("USD"),
+    targetCurrency: str = Query("KHR"),
+    limit: int = Query(default=100, ge=1, le=1000),
+    rate_repo = Depends(get_exchange_rate_repo)
+):
+    try:
+        rates = rate_repo.get_history(baseCurrency, targetCurrency, limit)
+        return {"items": rates}
+    except Exception as e:
+        logger.error(f"Error in get_exchange_rate_history: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

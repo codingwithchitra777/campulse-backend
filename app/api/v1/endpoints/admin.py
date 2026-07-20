@@ -2,9 +2,9 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import (get_user_repo, get_trade_repo, get_alloc_repo, get_current_user,
-                          require_admin, get_manual_price_repo, get_corp_action_repo)
+                          require_admin, get_manual_price_repo, get_corp_action_repo, get_exchange_rate_repo)
 from app.schemas.admin import (RoleUpdateRequest, AdminStats, ManualPriceRequest,
-                               CorporateActionCreate)
+                               CorporateActionCreate, ExchangeRateCreate)
 from app.repositories.price_history import PriceHistoryRepository
 from app.services import markets
 
@@ -212,4 +212,29 @@ def delete_corporate_action(
         raise
     except Exception as e:
         logger.error(f"Error in delete_corporate_action: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/exchange-rates")
+def create_exchange_rate(
+    req: ExchangeRateCreate,
+    current_user = Depends(get_current_user),
+    _admin = Depends(require_admin),
+    rate_repo = Depends(get_exchange_rate_repo)
+):
+    try:
+        if req.bidRate <= 0 or req.askRate <= 0:
+            raise HTTPException(status_code=400, detail="Rates must be positive")
+        created = rate_repo.add_rate(
+            base_currency=req.baseCurrency,
+            target_currency=req.targetCurrency,
+            bid_rate=req.bidRate,
+            ask_rate=req.askRate,
+            effective_date=req.effectiveDate.isoformat(),
+            created_by=current_user.user_id
+        )
+        return {"success": True, "rate": created}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in create_exchange_rate: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

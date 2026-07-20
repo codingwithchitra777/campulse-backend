@@ -11,6 +11,7 @@ from app.repositories.alert import AlertRepository
 from app.repositories.ai_insight import AIInsightRepository
 from app.repositories.corporate_action import CorporateActionRepository
 from app.repositories.loan import LoanRepository
+from app.repositories.exchange_rate import ExchangeRateRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.price_providers import price_router
@@ -94,3 +95,6 @@ def get_loan_repo() -> LoanRepository:
 def get_ai_coach_service():
     from app.services.ai_coach import AICoachService
     return AICoachService()
+
+def get_exchange_rate_repo() -> ExchangeRateRepository:
+    return ExchangeRateRepository()
