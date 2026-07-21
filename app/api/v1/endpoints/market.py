@@ -205,7 +205,7 @@ def get_price_history(
 ):
     try:
         from app.repositories.price_history import PriceHistoryRepository
-        hist = PriceHistoryRepository().get_history_days(days)
+        hist = PriceHistoryRepository().get_recent_history_all(days)
         # Filter for just this symbol
         symbol = symbol.upper()
         symbol_hist = [h for h in hist if h["ticker"] == symbol]
