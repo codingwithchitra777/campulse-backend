@@ -92,11 +92,12 @@ def get_position(
 
 @router.get("/portfolio")
 def get_portfolio(
+    valuationMode: str = "BID",
     current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service)
 ):
     try:
-        return portfolio_service.portfolio(current_user.user_id)
+        return portfolio_service.portfolio(current_user.user_id, valuation_mode=valuationMode)
     except Exception as e:
         logger.error(f"Error in get_portfolio: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -127,13 +128,14 @@ def get_pnl_yearly(
 def get_charts_timeline(
     market: Optional[str] = None,
     targetCurrency: str = "KHR",
+    valuationMode: str = "BID",
     current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service),
     rate_repo = Depends(get_exchange_rate_repo)
 ):
     try:
         rate = rate_repo.get_latest_rate('USD', 'KHR')
-        return portfolio_service.chart_timeline(current_user.user_id, market, targetCurrency, rate)
+        return portfolio_service.chart_timeline(current_user.user_id, market, targetCurrency, rate, valuation_mode=valuationMode)
     except Exception as e:
         logger.error(f"Error in get_charts_timeline: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

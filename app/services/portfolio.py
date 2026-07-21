@@ -91,7 +91,7 @@ class PortfolioService:
 
         return {"ticker": ticker, "remainingQty": total_qty, "avgCost": avg_cost, "unrealisedPnl": unrealised}
 
-    def portfolio(self, user_id: str) -> List[Dict[str, Any]]:
+    def portfolio(self, user_id: str, valuation_mode: str = "BID") -> List[Dict[str, Any]]:
         all_trades = self.trade_repo.list_trades(user_id)
         # First trade of each ticker fixes its market/currency (one ticker == one market).
         meta: Dict[str, tuple] = {}
@@ -105,9 +105,12 @@ class PortfolioService:
             
             last_price = None
             if price_res.price is not None:
-                # If a bid price exists (e.g. Gold), use it for valuation as this is the sell value.
-                bid = price_res.raw.get("bidPrice") if price_res.raw else None
-                last_price = Decimal(str(bid)) if bid is not None else Decimal(str(price_res.price))
+                if valuation_mode == "ASK":
+                    ask = price_res.raw.get("askPrice") if price_res.raw else None
+                    last_price = Decimal(str(ask)) if ask is not None else Decimal(str(price_res.price))
+                else:
+                    bid = price_res.raw.get("bidPrice") if price_res.raw else None
+                    last_price = Decimal(str(bid)) if bid is not None else Decimal(str(price_res.price))
 
             pos = self.position_detail(user_id, ticker, market=market)
             realised = self.realised_pnl(user_id, ticker, market=market)
@@ -170,7 +173,7 @@ class PortfolioService:
             y["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
         return out
 
-    def chart_timeline(self, user_id: str, market: Optional[str] = None, target_currency: str = "KHR", rate: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def chart_timeline(self, user_id: str, market: Optional[str] = None, target_currency: str = "KHR", rate: Optional[Dict[str, Any]] = None, valuation_mode: str = "BID") -> Dict[str, Any]:
         """Per-day cumulative series for the Reports charts: money invested vs
         recovered (from the trade ledger) and running realized P/L (allocations
         keyed to the SELL trade's order date, like realised_pnl_by_year)."""
@@ -236,9 +239,9 @@ class PortfolioService:
             else:
                 pnl.append({"date": day, "cumulativePnl": float(cumulative)})
 
-        return {"investment": investment, "pnl": pnl, "equity": self._equity_series(trades, target_currency, rate)}
+        return {"investment": investment, "pnl": pnl, "equity": self._equity_series(trades, target_currency, rate, valuation_mode)}
 
-    def _equity_series(self, trades: List[Dict[str, Any]], target_currency: str, rate: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _equity_series(self, trades: List[Dict[str, Any]], target_currency: str, rate: Optional[Dict[str, Any]], valuation_mode: str = "BID") -> List[Dict[str, Any]]:
         """Market value of open holdings on each snapshotted trading day.
         Prices forward-fill between snapshots; a ticker with no snapshot yet
         falls back to its most recent trade price (cost)."""
@@ -251,8 +254,10 @@ class PortfolioService:
 
         hist_by_date: Dict[str, Dict[str, int]] = defaultdict(dict)
         for h in history:
-            # Prefer bid price if it exists for accurate liquidation value.
-            hist_by_date[h["date"]][h["ticker"]] = h.get("bidPrice") if h.get("bidPrice") is not None else h["price"]
+            if valuation_mode == "ASK":
+                hist_by_date[h["date"]][h["ticker"]] = h.get("askPrice") if h.get("askPrice") is not None else h["price"]
+            else:
+                hist_by_date[h["date"]][h["ticker"]] = h.get("bidPrice") if h.get("bidPrice") is not None else h["price"]
 
         def convert_val(amount, trade_currency):
             if not amount or trade_currency == target_currency:
