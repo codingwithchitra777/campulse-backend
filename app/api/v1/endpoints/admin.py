@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import (get_user_repo, get_trade_repo, get_alloc_repo, get_current_user,
                           require_admin, get_manual_price_repo, get_corp_action_repo, get_exchange_rate_repo)
 from app.schemas.admin import (RoleUpdateRequest, AdminStats, ManualPriceRequest,
-                               CorporateActionCreate, ExchangeRateCreate)
+                               CorporateActionCreate, ExchangeRateCreate, GoldPriceCreate)
 from app.repositories.price_history import PriceHistoryRepository
 from app.services import markets
 
@@ -243,4 +243,43 @@ def create_exchange_rate(
         raise
     except Exception as e:
         logger.error(f"Error in create_exchange_rate: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/gold-history")
+def list_gold_history(
+    current_user = Depends(get_current_user),
+    _admin = Depends(require_admin),
+):
+    """Historical gold (XAU-KH) price points, newest first."""
+    try:
+        items = PriceHistoryRepository().get_history(["XAU-KH"])
+        return {"items": list(reversed(items))}
+    except Exception as e:
+        logger.error(f"Error in list_gold_history: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/gold-history")
+def add_gold_price(
+    req: GoldPriceCreate,
+    current_user = Depends(get_current_user),
+    _admin = Depends(require_admin),
+):
+    """Add (or overwrite) a dated gold price with bid & ask. Mid is stored as the
+    headline price; the same day is upserted."""
+    try:
+        if req.bidPrice <= 0 or req.askPrice <= 0:
+            raise HTTPException(status_code=400, detail="Bid and Ask must be positive")
+        mid = (req.bidPrice + req.askPrice) / 2
+        repo = PriceHistoryRepository()
+        repo.upsert_snapshot("XAU-KH", req.effectiveDate, mid, market="GOLD_KH",
+                             bid_price=req.bidPrice, ask_price=req.askPrice)
+        return {"success": True, "item": {
+            "ticker": "XAU-KH", "date": req.effectiveDate.isoformat(),
+            "price": mid, "bidPrice": req.bidPrice, "askPrice": req.askPrice}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in add_gold_price: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -43,3 +43,9 @@ class ExchangeRateCreate(BaseModel):
     bidRate: float
     askRate: float
     effectiveDate: date
+
+class GoldPriceCreate(BaseModel):
+    """A dated gold (XAU-KH) price point with bid & ask, kept in price_history."""
+    bidPrice: Decimal
+    askPrice: Decimal
+    effectiveDate: date
