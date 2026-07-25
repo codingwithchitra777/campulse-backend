@@ -18,7 +18,7 @@ load_dotenv()
 logfire_token = os.getenv("LOGFIRE_TOKEN")
 if logfire_token:
     try:
-        logfire.configure(token=logfire_token, service_name="campulse-backend")
+        logfire.configure(token=logfire_token, service_name="cambopulse-api")
     except Exception as e:
         print(f"Logfire configuration failed: {e}", file=sys.stderr)
 
@@ -99,7 +99,7 @@ app.include_router(api_router, prefix="/api")
 # Base health check
 @app.get("/api/healthz")
 async def health_check():
-    return {"status": "healthy", "service": "campulse-backend"}
+    return {"status": "healthy", "service": "cambopulse-api"}
 
 # Serve static assets (JS, CSS, images) from frontend/dist/frontend/browser/
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist", "frontend", "browser"))

@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 SERVICE_LABELS = {
-    "web": "campulse-web",
-    "backend": "campulse-backend",
+    "web": "cambopulse-web",
+    "backend": "cambopulse-api",
 }
 
 

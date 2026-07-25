@@ -1,10 +1,10 @@
-# campulse-backend
+# cambopulse-api
 
-# CamPulse
+# CamboPulse
 
 > **The Pulse of Cambodia's Financial Market**
 
-CamPulse is an all-in-one financial platform for tracking the **Cambodia Securities Exchange (CSX)**, **Gold Prices**, **Exchange Rates**, and **personal investment portfolios**.
+CamboPulse is an all-in-one financial platform for tracking the **Cambodia Securities Exchange (CSX)**, **Gold Prices**, **Exchange Rates**, and **personal investment portfolios**.
 
 The platform is available through:
 

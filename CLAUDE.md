@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`campulse-backend` is the **FastAPI (Python 3.12) backend** for CamPulse — a Cambodia-focused trading journal / portfolio tracker. It serves the `campulse-web` Angular app (sibling repo, has its own CLAUDE.md) **and** hosts the Telegram bot as a webhook. It's one of three CamPulse repos that share a single database:
+`cambopulse-api` (local dir `campulse-backend`; GitHub `chitrasem001/cambopulse-api`) is the **FastAPI (Python 3.12) backend** for CamboPulse — a Cambodia-focused trading journal / portfolio tracker. It serves the `cambopulse-web` Angular app (sibling repo, has its own CLAUDE.md) **and** hosts the Telegram bot as a webhook. It's one of three CamboPulse repos that share a single database:
 
-- `campulse-web` — Angular frontend (talks to this API).
-- `campulse-backend` — this service (REST API + Telegram webhook + background jobs).
+- `cambopulse-web` — Angular frontend (talks to this API).
+- `cambopulse-api` — this service (REST API + Telegram webhook + background jobs).
 - `campulse-bot` — the **retired** standalone polling bot; its features now live here as `app/services/telegram_bot.py`. Don't add features there.
 
 > **Heads-up:** `README.md` describes an aspirational "Spring Boot / Java 21" stack and a Lowest-Price-First roadmap. That's marketing, not the code. The real stack is **FastAPI + psycopg2 + raw SQL** (see `pyproject.toml`).

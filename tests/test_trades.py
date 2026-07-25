@@ -22,7 +22,7 @@ def user_id():
 def test_health_check():
     resp = client.get("/api/healthz")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "healthy", "service": "campulse-backend"}
+    assert resp.json() == {"status": "healthy", "service": "cambopulse-api"}
 
 
 def test_get_trades_empty_for_new_user(user_id):
