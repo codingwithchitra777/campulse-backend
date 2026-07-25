@@ -15,7 +15,7 @@ class Settings:
     firebase_sa_path: str = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
     firebase_credentials_json: str = os.getenv("FIREBASE_CREDENTIALS", "")  # Secret Manager
     firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID", "")
-    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "1048965896991-dirq98278c5cj312k2o0kq3f307e2krf.apps.googleusercontent.com")
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "1048969770228-2buh83lf9nrtc0fb3gd845dp5u1nscsq.apps.googleusercontent.com")
     csx_base_url: str = os.getenv("CSX_BASE_URL", "https://csx.com.kh")
     csx_lang: str = os.getenv("CSX_LANG", "en")
     # International equities provider (Phase 2). Unused until a US instrument exists.
