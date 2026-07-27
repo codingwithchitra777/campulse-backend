@@ -26,7 +26,10 @@ class Settings:
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8")
     default_user_id: str = os.getenv("DEFAULT_USER_ID", "u001")
     database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/trading_journal")
-    redis_url: str = os.getenv("REDIS_URL", "redis://default:FIwEoRahdTexVeF2MlgQRyT2XjhwIUuJ@time-camera-show-26003.db.redis.io:11914")
+    # Cache only — never the system of record. Unset/unreachable Redis degrades
+    # to Postgres reads (see services/pricing.py), it does not break prices.
+    # Must be env-provided: no credentials in source.
+    redis_url: str = os.getenv("REDIS_URL", "")
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-insecure-secret-change-me-in-production")
     jwt_expire_days: int = int(os.getenv("JWT_EXPIRE_DAYS", "30"))
 

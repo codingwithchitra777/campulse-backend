@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 PHNOM_PENH_TZ = pytz.timezone("Asia/Phnom_Penh")
 SNAPSHOT_INTERVAL_SECONDS = 30 * 60
+# How long a Postgres fallback read is reused, so a Redis outage doesn't turn
+# every price request into a database query.
+DB_FALLBACK_TTL_SECONDS = 60
 
 # Standard CSX Stock Ticker Fallbacks (Riel prices)
 FALLBACK_PRICES = {
@@ -46,6 +49,11 @@ class PricingService:
     """
     def __init__(self):
         self._last_snapshot_ts = 0.0
+        # Last successful CSX fetch, kept in-process so a Redis outage doesn't
+        # immediately cost us live prices on this worker.
+        self._memory_prices: List[dict] = []
+        # Short-lived cache of the Postgres fallback read.
+        self._db_fallback_cache = TTLCache(maxsize=1, ttl=DB_FALLBACK_TTL_SECONDS)
         # Start a background daemon thread to periodically refresh prices
         threading.Thread(target=self._background_refresh_loop, daemon=True).start()
 
@@ -55,8 +63,12 @@ class PricingService:
         self._startup_sync()
         while True:
             try:
-                # Attempt to acquire lock to prevent thundering herd across workers
-                if RedisService().acquire_lock("csx:poll_lock", timeout=10):
+                # Attempt to acquire lock to prevent thundering herd across workers.
+                # If Redis itself is down we can't coordinate — poll anyway rather
+                # than stop refreshing prices entirely (snapshot upserts are
+                # idempotent, so a duplicate fetch is harmless).
+                redis_service = RedisService()
+                if redis_service.acquire_lock("csx:poll_lock", timeout=10) or not redis_service.available:
                     prices = self._fetch_all_prices_from_api(force=True)
                     # Persist real (never fallback) prices as daily snapshots,
                     # throttled — the upsert makes the day's last write the close.
@@ -165,28 +177,80 @@ class PricingService:
                     continue
                     
             if all_stocks:
+                self._memory_prices = all_stocks
                 RedisService().save_latest_prices(all_stocks)
-                
+
         except Exception as e:
             logger.error(f"Error parsing CSX API response: {e}")
-            
+
         return all_stocks
+
+    def _prices_from_db(self) -> list:
+        """Latest stored close per ticker from Postgres — the durable fallback
+        when Redis is unavailable. Cached briefly so an outage doesn't turn every
+        request into a DB round-trip. Marked `stale` since these are closes, not
+        live quotes (no intraday change data is available from history)."""
+        cached = self._db_fallback_cache.get("all")
+        if cached is not None:
+            return cached
+
+        prices = []
+        try:
+            for row in PriceHistoryRepository().get_latest_snapshot_all():
+                prices.append({
+                    "ticker": row["ticker"],
+                    "price": row["price"],
+                    "change": 0,
+                    "change_direction": "equal",
+                    "stale": True,
+                    "asOf": row["date"],
+                })
+        except Exception as e:
+            logger.error(f"Postgres price fallback failed: {e}")
+
+        self._db_fallback_cache["all"] = prices
+        return prices
+
+    def _static_fallback_prices(self) -> list:
+        return [
+            {
+                "ticker": ticker,
+                "price": fb["price"],
+                "change": fb["change"],
+                "change_direction": fb["change_direction"],
+                "stale": True,
+            }
+            for ticker, fb in FALLBACK_PRICES.items()
+        ]
+
+    def _current_prices(self) -> list:
+        """Live prices with graceful degradation:
+        Redis → last-good in-process fetch → Postgres closes → static fallbacks.
+        Redis is only a cache, so losing it costs freshness, never availability."""
+        cached_prices = RedisService().get_latest_prices()
+        if cached_prices:
+            return cached_prices
+        if self._memory_prices:
+            return self._memory_prices
+        db_prices = self._prices_from_db()
+        if db_prices:
+            return db_prices
+        return self._static_fallback_prices()
 
     def get_latest_price(self, symbol: str) -> PriceResult:
         symbol = symbol.upper()
-        
-        # Read strictly from Redis
-        cached_prices = RedisService().get_latest_prices()
-        for p in cached_prices:
+
+        for p in self._current_prices():
             if p.get("ticker") == symbol:
                 return PriceResult(
                     ticker=symbol,
                     price=p.get("price"),
                     change=p.get("change"),
-                    change_direction=p.get("change_direction")
+                    change_direction=p.get("change_direction"),
+                    raw={"stale": True} if p.get("stale") else None,
                 )
 
-        # Fallback
+        # Known ticker with no data anywhere — last-resort static price.
         if symbol in FALLBACK_PRICES:
             fb = FALLBACK_PRICES[symbol]
             return PriceResult(
@@ -200,21 +264,26 @@ class PricingService:
         return PriceResult(ticker=symbol, price=None, raw={"error": "Price not found"})
 
     def get_all_prices(self) -> list:
-        """Get all stock prices from Redis (no external API calls on demand)."""
-        cached_prices = RedisService().get_latest_prices()
-        if cached_prices:
-            return cached_prices
+        """Get all stock prices (no external API calls on demand)."""
+        return self._current_prices()
 
-        # If Redis is empty, build response from fallbacks
-        fb_list = []
-        for ticker, fb in FALLBACK_PRICES.items():
-            fb_list.append({
-                "ticker": ticker,
-                "price": fb["price"],
-                "change": fb["change"],
-                "change_direction": fb["change_direction"]
-            })
-        return fb_list
+    def get_sparklines(self, tickers: List[str]) -> Dict[str, List[float]]:
+        """60-day close series per ticker: Redis first, Postgres when the cache
+        is unavailable or hasn't been warmed for a ticker."""
+        tickers = [t.strip().upper() for t in tickers if t and t.strip()]
+        if not tickers:
+            return {}
+
+        result = RedisService().get_sparklines_batch(tickers)
+        missing = [t for t in tickers if not result.get(t)]
+        if missing:
+            try:
+                for ticker, series in PriceHistoryRepository().get_sparklines(missing).items():
+                    if series:
+                        result[ticker] = series
+            except Exception as e:
+                logger.error(f"Postgres sparkline fallback failed: {e}")
+        return result
 
 # Instantiate a single global instance for dependency injection (Singleton)
 pricing_service_instance = PricingService()

@@ -12,7 +12,6 @@ from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
-from app.services.redis_service import RedisService
 from app.services.trade_service import record_trade
 from app.services.markets import format_money
 from app.utils.chart_renderer import ChartRenderer
@@ -256,11 +255,11 @@ class TelegramBotService:
             
         tickers = [s.get('ticker') for s in stocks if s.get('ticker')]
         try:
-            sparklines = RedisService().get_sparklines_batch(tickers)
+            sparklines = self.pricing.get_sparklines(tickers)
         except Exception as e:
             logger.error(f"Failed to fetch sparklines: {e}")
             sparklines = {}
-            
+
         self.client.send_photo(chat_id, self.renderer.all_stocks_card(stocks, sparklines), "\U0001F4C8 Market Overview")
 
     def _top_orders(self, user_id: str, chat_id: int) -> None:
@@ -310,8 +309,7 @@ class TelegramBotService:
             
         tickers = [s.get('ticker') for s in stocks if s.get('ticker')]
         try:
-            from app.services.redis_service import RedisService
-            sparklines = RedisService().get_sparklines_batch(tickers)
+            sparklines = self.pricing.get_sparklines(tickers)
         except Exception as e:
             logger.error(f"Failed to fetch sparklines for broadcast: {e}")
             sparklines = {}
