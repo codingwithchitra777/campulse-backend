@@ -36,7 +36,7 @@ There is no lint step configured.
      cur.execute("DELETE FROM users WHERE user_id = ANY(%s)", (ids,))   # enumerate first, then delete exact ids
      ```
    - Use disposable ids and delete-by-exact-id in fixtures for new tests (see `tests/test_watchlist.py`, `test_gold.py`).
-2. **The deployed backend does NOT auto-deploy** (FastAPI Cloud at `campulse-backend.fastapicloud.dev`). After pushing, changes are live only after a **manual redeploy** — always remind the user.
+2. **The deployed backend does NOT auto-deploy** (FastAPI Cloud, served at `https://api.cambopulse.com`, custom domain over `cambopulse-api.fastapicloud.dev`). After pushing, changes are live only after a **manual redeploy** — always remind the user.
 3. **Schema migrations live in `init_db()`** (`app/db/database.py`) as idempotent `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` / guarded `ALTER … TYPE`. They apply to prod the moment any code (including a test run) connects. Add new tables/columns there, keeping them idempotent.
 
 ## Architecture
