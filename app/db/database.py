@@ -226,6 +226,21 @@ def init_db(conn):
             );
         """)
 
+        # Grid trading: one active grid plan per user. CamPulse records data, it
+        # does not execute — a plan is the saved ladder of resting orders the
+        # user placed at their broker plus its running fill log. Stored as a
+        # JSONB document (the camelCase shape the web client owns); each fill is
+        # a normal trade recorded via the trade endpoints, so this table never
+        # needs to be queried inside and stays decoupled from trades/allocations.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS grid_plans (
+                user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                plan JSONB NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
         # Corporate actions (bonus shares / splits): admin-entered per (market,
         # symbol) with an ex-date; a daemon applies each one once to every
         # holder's open lots (price ÷ m in place + a bonus BUY row dated at the
