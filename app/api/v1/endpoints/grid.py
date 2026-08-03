@@ -11,13 +11,13 @@ router = APIRouter()
 
 
 @router.get("/grid")
-def get_grid(current_user=Depends(get_current_user), repo=Depends(get_grid_repo)):
-    """The caller's active grid plan (or null if none registered)."""
+def list_grids(current_user=Depends(get_current_user), repo=Depends(get_grid_repo)):
+    """All of the caller's grid plans (most-recently-updated first)."""
     try:
-        plan = repo.get(current_user.user_id)
-        return {"success": True, "plan": plan}
+        plans = repo.list_for(current_user.user_id)
+        return {"success": True, "plans": plans}
     except Exception as e:
-        logger.error(f"Error in get_grid: {e}", exc_info=True)
+        logger.error(f"Error in list_grids: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -27,28 +27,33 @@ def upsert_grid(
     current_user=Depends(get_current_user),
     repo=Depends(get_grid_repo),
 ):
-    """Register / update the caller's active grid plan.
+    """Create or update one grid plan (keyed by body.id).
 
     This only stores the ladder + running fill log. Recording a fill is a
     normal POST /trades/confirm from the client, so there is no execution here.
+    A user may keep several grids at once (e.g. one per ticker).
     """
     try:
         plan = body.model_dump()
         # Server-stamp the mutation time; keep the client-sent createdAt.
         plan["updatedAt"] = datetime.now(timezone.utc).isoformat()
-        repo.upsert(current_user.user_id, plan)
+        repo.upsert(body.id, current_user.user_id, plan)
         return {"success": True, "plan": plan}
     except Exception as e:
         logger.error(f"Error in upsert_grid: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/grid")
-def delete_grid(current_user=Depends(get_current_user), repo=Depends(get_grid_repo)):
-    """Discard the caller's active grid plan (recorded trades are untouched)."""
+@router.delete("/grid/{grid_id}")
+def delete_grid(
+    grid_id: str,
+    current_user=Depends(get_current_user),
+    repo=Depends(get_grid_repo),
+):
+    """Discard one of the caller's grid plans (recorded trades are untouched)."""
     try:
-        repo.delete(current_user.user_id)
-        return {"success": True}
+        deleted = repo.delete(grid_id, current_user.user_id)
+        return {"success": True, "deleted": deleted}
     except Exception as e:
         logger.error(f"Error in delete_grid: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

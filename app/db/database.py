@@ -234,12 +234,34 @@ def init_db(conn):
         # needs to be queried inside and stays decoupled from trades/allocations.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS grid_plans (
-                user_id VARCHAR(100) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                grid_id VARCHAR(100) PRIMARY KEY,
+                user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                 plan JSONB NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Migrate the older single-plan table (user_id was the PK, one grid per
+        # user) to multiple grids per user keyed by grid_id. Idempotent: only
+        # runs while grid_id is still missing.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'grid_plans' AND column_name = 'grid_id'
+                ) THEN
+                    ALTER TABLE grid_plans ADD COLUMN grid_id VARCHAR(100);
+                    UPDATE grid_plans
+                       SET grid_id = 'grid_' || md5(user_id || clock_timestamp()::text)
+                     WHERE grid_id IS NULL;
+                    ALTER TABLE grid_plans DROP CONSTRAINT IF EXISTS grid_plans_pkey;
+                    ALTER TABLE grid_plans ADD PRIMARY KEY (grid_id);
+                    ALTER TABLE grid_plans ALTER COLUMN grid_id SET NOT NULL;
+                END IF;
+            END $$;
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_grid_plans_user ON grid_plans(user_id);")
 
         # Corporate actions (bonus shares / splits): admin-entered per (market,
         # symbol) with an ex-date; a daemon applies each one once to every

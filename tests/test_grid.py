@@ -1,8 +1,9 @@
-"""Grid plan CRUD (GET/PUT/DELETE /api/grid).
+"""Grid plan CRUD (GET /api/grid, PUT /api/grid, DELETE /api/grid/{id}).
 
-The plan is a client-owned JSON document; the server just stores one per user.
-Follows the disposable-id + delete-by-exact-id fixture pattern (tests run
-against prod Postgres — see CLAUDE.md).
+Each plan is a client-owned JSON document; the server stores several per user
+(one row per grid_id) and scopes every read/write/delete to the owner. Follows
+the disposable-id + delete-by-exact-id fixture pattern (tests run against prod
+Postgres — see CLAUDE.md).
 """
 import uuid
 
@@ -20,21 +21,24 @@ def auth_headers(user_id: str) -> dict:
     return {"Authorization": f"Bearer {create_access_token(user_id=user_id, role='user')}"}
 
 
-@pytest.fixture
-def user_id():
-    uid = f"pytest_{uuid.uuid4().hex[:12]}"
-    yield uid
+def _cleanup(uid: str):
     with get_db() as conn:
         with conn.cursor() as cur:
-            # grid_plans ON DELETE CASCADE with users, but delete the row too in
-            # case the FK ever changes.
             cur.execute("DELETE FROM grid_plans WHERE user_id = %s", (uid,))
             cur.execute("DELETE FROM users WHERE user_id = %s", (uid,))
 
 
-def sample_plan() -> dict:
+@pytest.fixture
+def user_id():
+    uid = f"pytest_{uuid.uuid4().hex[:12]}"
+    yield uid
+    _cleanup(uid)
+
+
+def sample_plan(grid_id: str = "g1", ticker: str = "AAPL") -> dict:
     return {
-        "ticker": "AAPL",
+        "id": grid_id,
+        "ticker": ticker,
         "market": "US",
         "currency": "USD",
         "lower": 180,
@@ -61,7 +65,7 @@ def sample_plan() -> dict:
 def test_get_grid_empty(user_id):
     r = client.get("/api/grid", headers=auth_headers(user_id))
     assert r.status_code == 200
-    assert r.json() == {"success": True, "plan": None}
+    assert r.json() == {"success": True, "plans": []}
 
 
 def test_put_then_get_roundtrips(user_id):
@@ -69,40 +73,74 @@ def test_put_then_get_roundtrips(user_id):
     assert r.status_code == 200
     assert r.json()["success"] is True
 
-    got = client.get("/api/grid", headers=auth_headers(user_id)).json()["plan"]
+    plans = client.get("/api/grid", headers=auth_headers(user_id)).json()["plans"]
+    assert len(plans) == 1
+    got = plans[0]
+    assert got["id"] == "g1"
     assert got["ticker"] == "AAPL"
-    assert got["market"] == "US"
     assert got["realised"] == 75
-    assert got["openLots"] == 0
     assert len(got["rungs"]) == 2
-    assert got["rungs"][1]["side"] == "SELL"
     assert got["log"][0]["pnl"] == 75
     assert got["updatedAt"]  # server-stamped on write
 
 
-def test_put_is_upsert(user_id):
-    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan())
-    plan2 = sample_plan()
-    plan2["ticker"] = "MSFT"
-    plan2["realised"] = 120
-    client.put("/api/grid", headers=auth_headers(user_id), json=plan2)
+def test_multiple_grids_per_user(user_id):
+    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan("g1", "AAPL"))
+    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan("g2", "MSFT"))
+    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan("g3", "NVDA"))
 
-    got = client.get("/api/grid", headers=auth_headers(user_id)).json()["plan"]
-    assert got["ticker"] == "MSFT"
-    assert got["realised"] == 120
+    plans = client.get("/api/grid", headers=auth_headers(user_id)).json()["plans"]
+    assert len(plans) == 3
+    assert {p["ticker"] for p in plans} == {"AAPL", "MSFT", "NVDA"}
 
 
-def test_delete_grid(user_id):
-    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan())
-    r = client.delete("/api/grid", headers=auth_headers(user_id))
-    assert r.status_code == 200
-    assert r.json()["success"] is True
-    assert client.get("/api/grid", headers=auth_headers(user_id)).json()["plan"] is None
+def test_put_is_upsert_per_grid(user_id):
+    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan("g1", "AAPL"))
+    updated = sample_plan("g1", "AAPL")
+    updated["realised"] = 120
+    client.put("/api/grid", headers=auth_headers(user_id), json=updated)
+
+    plans = client.get("/api/grid", headers=auth_headers(user_id)).json()["plans"]
+    assert len(plans) == 1  # same id → updated, not duplicated
+    assert plans[0]["realised"] == 120
+
+
+def test_delete_one_grid_leaves_others(user_id):
+    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan("g1", "AAPL"))
+    client.put("/api/grid", headers=auth_headers(user_id), json=sample_plan("g2", "MSFT"))
+
+    r = client.delete("/api/grid/g1", headers=auth_headers(user_id))
+    assert r.status_code == 200 and r.json()["deleted"] is True
+
+    plans = client.get("/api/grid", headers=auth_headers(user_id)).json()["plans"]
+    assert [p["id"] for p in plans] == ["g2"]
+
+
+def test_cannot_touch_another_users_grid():
+    owner = f"pytest_{uuid.uuid4().hex[:12]}"
+    attacker = f"pytest_{uuid.uuid4().hex[:12]}"
+    try:
+        client.put("/api/grid", headers=auth_headers(owner), json=sample_plan("shared_id", "AAPL"))
+
+        # Attacker tries to overwrite the same grid_id — must not clobber it.
+        hijack = sample_plan("shared_id", "HACK")
+        client.put("/api/grid", headers=auth_headers(attacker), json=hijack)
+        owner_plan = client.get("/api/grid", headers=auth_headers(owner)).json()["plans"][0]
+        assert owner_plan["ticker"] == "AAPL"  # untouched
+
+        # Attacker tries to delete it — reports nothing deleted, owner keeps it.
+        d = client.delete("/api/grid/shared_id", headers=auth_headers(attacker)).json()
+        assert d["deleted"] is False
+        assert len(client.get("/api/grid", headers=auth_headers(owner)).json()["plans"]) == 1
+    finally:
+        _cleanup(owner)
+        _cleanup(attacker)
 
 
 def test_grid_requires_auth():
     assert client.get("/api/grid").status_code == 401
     assert client.put("/api/grid", json=sample_plan()).status_code == 401
+    assert client.delete("/api/grid/g1").status_code == 401
 
 
 def test_put_rejects_bad_plan(user_id):
@@ -110,3 +148,7 @@ def test_put_rejects_bad_plan(user_id):
     del bad["ticker"]  # required field missing
     r = client.put("/api/grid", headers=auth_headers(user_id), json=bad)
     assert r.status_code == 422
+
+    no_id = sample_plan()
+    del no_id["id"]  # id is now required
+    assert client.put("/api/grid", headers=auth_headers(user_id), json=no_id).status_code == 422

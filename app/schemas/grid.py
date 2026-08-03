@@ -32,6 +32,7 @@ class GridFill(BaseModel):
 
 
 class GridPlanBody(BaseModel):
+    id: str  # client-generated grid id (also the grid_plans.grid_id key)
     ticker: str
     market: Literal["CSX", "US", "GOLD_KH"]
     currency: Literal["KHR", "USD"]
