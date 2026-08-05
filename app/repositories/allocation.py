@@ -90,14 +90,15 @@ class AllocationRepository:
                 cur.execute(
                      """
                      SELECT EXTRACT(YEAR FROM t.order_date)::INT AS year,
+                            a.currency,
                             a.ticker,
                             SUM(a.realised_pnl) AS realised_pnl,
                             COUNT(DISTINCT a.sell_trade_id) AS sell_count
                      FROM allocations a
                      JOIN trades t ON t.trade_id = a.sell_trade_id
                      WHERE a.user_id = %s
-                     GROUP BY 1, 2
-                     ORDER BY 1 DESC, 3 DESC
+                     GROUP BY 1, 2, 3
+                     ORDER BY 1 DESC, 2 ASC, 4 DESC
                      """,
                      (user_id,)
                 )
@@ -105,9 +106,10 @@ class AllocationRepository:
                 return [
                      {
                          "year": r[0],
-                         "ticker": r[1],
-                         "realisedPnl": int(r[2]),
-                         "sellCount": int(r[3])
+                         "currency": r[1],
+                         "ticker": r[2],
+                         "realisedPnl": float(r[3]),
+                         "sellCount": int(r[4])
                      }
                      for r in rows
                 ]

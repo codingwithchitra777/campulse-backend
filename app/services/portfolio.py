@@ -152,25 +152,29 @@ class PortfolioService:
 
     def realised_pnl_by_year(self, user_id: str) -> List[Dict[str, Any]]:
         rows = self.alloc_repo.realised_pnl_by_year(user_id)
-        years: Dict[int, Dict[str, Any]] = {}
+        # Group per (year, currency) — KHR and USD P/L are never summed together
+        # (blending currencies would be a meaningless money figure).
+        groups: Dict[tuple, Dict[str, Any]] = {}
         for r in rows:
-            y = years.setdefault(r["year"], {
+            key = (r["year"], r["currency"])
+            g = groups.setdefault(key, {
                 "year": r["year"],
-                "realisedPnl": 0,
+                "currency": r["currency"],
+                "realisedPnl": 0.0,
                 "sellCount": 0,
                 "tickers": []
             })
-            y["realisedPnl"] += r["realisedPnl"]
+            g["realisedPnl"] += r["realisedPnl"]
             # A sell trade has exactly one ticker, so per-ticker counts sum cleanly.
-            y["sellCount"] += r["sellCount"]
-            y["tickers"].append({
+            g["sellCount"] += r["sellCount"]
+            g["tickers"].append({
                 "ticker": r["ticker"],
                 "realisedPnl": r["realisedPnl"],
                 "sellCount": r["sellCount"]
             })
-        out = sorted(years.values(), key=lambda x: x["year"], reverse=True)
-        for y in out:
-            y["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
+        out = sorted(groups.values(), key=lambda x: (-x["year"], x["currency"]))
+        for g in out:
+            g["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
         return out
 
     def chart_timeline(self, user_id: str, market: Optional[str] = None, target_currency: str = "KHR", rate: Optional[Dict[str, Any]] = None, valuation_mode: str = "BID") -> Dict[str, Any]:

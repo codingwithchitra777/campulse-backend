@@ -23,7 +23,8 @@ def user_id():
 
 
 def _insert_matched_pair(user_id: str, ticker: str, year: int, seq: int,
-                         buy_price: int, sell_price: int, qty: int) -> int:
+                         buy_price: int, sell_price: int, qty: int,
+                         currency: str = "KHR") -> int:
     """Insert a backdated BUY+SELL pair with its allocation directly via the
     repositories — POST /api/trades always stamps utcnow(), so multi-year
     fixtures can't be created through the API. Returns the realised P/L."""
@@ -48,7 +49,7 @@ def _insert_matched_pair(user_id: str, ticker: str, year: int, seq: int,
         "sellTradeId": sell_id, "buyTradeId": buy_id, "qtyAllocated": qty,
         "buyPrice": buy_price, "buyCommission": 0, "buyQty": qty,
         "sellPrice": sell_price, "sellCommission": 0, "sellQty": qty,
-        "realisedPnl": realised, "createdAt": order_date,
+        "realisedPnl": realised, "createdAt": order_date, "currency": currency,
     })
     return realised
 
@@ -84,9 +85,26 @@ def test_pnl_yearly_current_year_via_api(user_id):
     assert len(rows) == 1
     row = rows[0]
     assert row["year"] == datetime.utcnow().year
+    assert row["currency"] == "KHR"
     assert row["realisedPnl"] == expected_pnl
     assert row["sellCount"] == 1
     assert row["tickers"] == [{"ticker": "ABC", "realisedPnl": expected_pnl, "sellCount": 1}]
+
+
+def test_pnl_yearly_splits_by_currency(user_id):
+    khr = _insert_matched_pair(user_id, "PPAP", 2024, seq=1,
+                               buy_price=100, sell_price=150, qty=10, currency="KHR")
+    usd = _insert_matched_pair(user_id, "AAPL", 2024, seq=3,
+                               buy_price=180, sell_price=200, qty=5, currency="USD")
+
+    rows = client.get("/api/pnl/yearly", headers=auth_headers(user_id)).json()
+    y2024 = [r for r in rows if r["year"] == 2024]
+    # Two separate rows for 2024 — one per currency, never summed into one figure.
+    assert len(y2024) == 2
+    by_ccy = {r["currency"]: r for r in y2024}
+    assert set(by_ccy) == {"KHR", "USD"}
+    assert by_ccy["KHR"]["realisedPnl"] == khr
+    assert by_ccy["USD"]["realisedPnl"] == usd
 
 
 def test_pnl_yearly_groups_by_sell_year(user_id):
