@@ -16,6 +16,10 @@ dependencies = [
     "pyjwt",
     "redis",
     "anthropic",
+    # Gold-board photo OCR (Telegram admin flow). ONNX-based, no PyTorch.
+    "rapidocr-onnxruntime",
+    "opencv-python-headless",
+    "numpy",
 ]
 
 [tool.uv]

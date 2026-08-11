@@ -72,3 +72,20 @@ def send_photo(chat_id: int, image: Union[io.BytesIO, str], caption: Optional[st
     except Exception as e:
         logger.error(f"Telegram sendPhoto failed (chat {chat_id}): {e}")
         return None
+
+
+def download_file(file_id: str) -> Optional[bytes]:
+    """Fetch a photo/document the user sent: getFile -> download its bytes.
+    Returns None on any failure (logged, never raised)."""
+    try:
+        meta = requests.get(_url("getFile"), params={"file_id": file_id}, timeout=15)
+        meta.raise_for_status()
+        path = meta.json().get("result", {}).get("file_path")
+        if not path:
+            return None
+        fr = requests.get(f"{_BASE}/file/bot{settings.telegram_token}/{path}", timeout=30)
+        fr.raise_for_status()
+        return fr.content
+    except Exception as e:
+        logger.error(f"Telegram download_file failed ({file_id}): {e}")
+        return None

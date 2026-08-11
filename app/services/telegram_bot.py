@@ -6,10 +6,13 @@ import re
 import logging
 from typing import Optional, Tuple
 
+from datetime import date
+
 from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
+from app.repositories.price_history import PriceHistoryRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.trade_service import record_trade
@@ -113,6 +116,76 @@ class TelegramBotService:
         except Exception as e:
             logger.error(f"Telegram command '{command}' failed: {e}", exc_info=True)
             self.client.send_message(chat_id, "❌ Something went wrong. Please try again.")
+
+    # --- Gold price board photo (admin only) ---
+
+    def handle_gold_image(self, user_id: str, chat_id: int, full_name: str,
+                          file_id: str, caption: str = "") -> None:
+        """An admin sends the daily gold board photo -> OCR it -> save the gold
+        price via the same path as the manual admin form (upsert XAU-KH with
+        bid/ask). Only the canonical account's role is trusted."""
+        account_id = self.link_repo.get_primary(user_id)
+        user = self.user_repo.get_user(account_id) or self.user_repo.get_user(user_id)
+        if not user or user.get("role") != "admin":
+            self.client.send_message(chat_id, "🔒 Only an admin can set the gold price from a photo.")
+            return
+
+        self.client.send_message(chat_id, "🔎 Reading the gold board…")
+        img = self.client.download_file(file_id)
+        if not img:
+            self.client.send_message(chat_id, "❌ Couldn't download that image. Send it again.")
+            return
+
+        try:
+            from app.services.gold_ocr import parse_gold_board
+            rows = parse_gold_board(img)
+        except ImportError:
+            self.client.send_message(chat_id, "❌ Gold OCR isn't available on the server. Use the admin page.")
+            return
+        except Exception as e:
+            logger.error(f"gold OCR failed: {e}", exc_info=True)
+            self.client.send_message(chat_id, "❌ OCR failed on this image. Enter it on the admin page.")
+            return
+
+        rows = [r for r in rows if r.get("sell_out") and r.get("buy_in")]
+        if not rows:
+            self.client.send_message(
+                chat_id,
+                "❌ Couldn't read valid prices. Send a clearer, straight-on photo, or use the admin page.")
+            return
+
+        # Which row is the app's gold? Default the first (bar); a caption digit
+        # 1–N picks another row.
+        idx = 0
+        cap = (caption or "").strip()
+        if cap[:1].isdigit():
+            n = int(cap[0])
+            if 1 <= n <= len(rows):
+                idx = n - 1
+        row = rows[idx]
+        # App convention (matches the manual form + home display): the headline
+        # "bid" is the higher លក់ចេញ / sell-out; "ask" is the lower ទិញចូល.
+        bid = row["sell_out"]
+        ask = row["buy_in"]
+        today = date.today()
+        mid = (bid + ask) / 2
+        PriceHistoryRepository().upsert_snapshot(
+            "XAU-KH", today, mid, market="GOLD_KH", bid_price=bid, ask_price=ask)
+
+        lines = [
+            f"✅ Gold price saved for {today.isoformat()}",
+            f"Row {idx + 1}: {row['type_en']}",
+            f"  bid (លក់ចេញ) = {bid}",
+            f"  ask (ទិញចូល) = {ask}",
+            f"  mid = {mid}",
+            "",
+            "Board read:",
+        ]
+        for i, r in enumerate(rows):
+            lines.append(f"  {i + 1}. {r['type_en']}: {r['sell_out']} / {r['buy_in']}")
+        lines.append("")
+        lines.append("Wrong row? Re-send the photo with a caption 1–4, or fix it on the admin gold page.")
+        self.client.send_message(chat_id, "\n".join(lines))
 
     # --- Handlers ---
 
