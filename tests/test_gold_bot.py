@@ -11,6 +11,7 @@ import pytest
 
 from app.repositories.user import UserRepository
 from app.repositories.price_history import PriceHistoryRepository
+from app.repositories.exchange_rate import ExchangeRateRepository
 from app.services.telegram_bot import TelegramBotService
 from app.db.database import get_db
 
@@ -127,6 +128,65 @@ def test_gold_command_empty(monkeypatch):
     client = FakeClient()
     TelegramBotService(client=client)._gold(111)
     assert any("no gold" in m.lower() for m in client.messages)
+
+
+def test_setgold_admin_saves(monkeypatch):
+    uid = _mk_user("admin")
+    captured = {}
+    monkeypatch.setattr(
+        PriceHistoryRepository, "upsert_snapshot",
+        lambda self, t, d, p, market="CSX", bid_price=None, ask_price=None:
+            captured.update(ticker=t, market=market, bid=bid_price, ask=ask_price))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_gold(uid, 111, "510 505")
+        assert captured == {"ticker": "XAU-KH", "market": "GOLD_KH", "bid": 510.0, "ask": 505.0}
+        assert any("saved" in m.lower() for m in client.messages)
+    finally:
+        _cleanup(uid)
+
+
+def test_setgold_rejects_non_admin(monkeypatch):
+    uid = _mk_user("user")
+    called = {"n": 0}
+    monkeypatch.setattr(PriceHistoryRepository, "upsert_snapshot",
+                        lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_gold(uid, 111, "510 505")
+        assert called["n"] == 0
+        assert any("admin" in m.lower() for m in client.messages)
+    finally:
+        _cleanup(uid)
+
+
+def test_setrate_admin_saves(monkeypatch):
+    uid = _mk_user("admin")
+    captured = {}
+    monkeypatch.setattr(
+        ExchangeRateRepository, "add_rate",
+        lambda self, base, target, bid, ask, eff, created_by=None:
+            (captured.update(base=base, target=target, bid=bid, ask=ask) or {}))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_rate(uid, 111, "4100 4120")
+        assert captured == {"base": "USD", "target": "KHR", "bid": 4100.0, "ask": 4120.0}
+    finally:
+        _cleanup(uid)
+
+
+def test_setrate_rejects_non_admin(monkeypatch):
+    uid = _mk_user("user")
+    called = {"n": 0}
+    monkeypatch.setattr(ExchangeRateRepository, "add_rate",
+                        lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_rate(uid, 111, "4100 4120")
+        assert called["n"] == 0
+        assert any("admin" in m.lower() for m in client.messages)
+    finally:
+        _cleanup(uid)
 
 
 def test_gold_photo_caption_picks_row(monkeypatch):

@@ -13,6 +13,7 @@ from app.repositories.allocation import AllocationRepository
 from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
 from app.repositories.price_history import PriceHistoryRepository
+from app.repositories.exchange_rate import ExchangeRateRepository
 from app.services.pricing import pricing_service_instance
 from app.services.portfolio import PortfolioService
 from app.services.trade_service import record_trade
@@ -31,6 +32,13 @@ HELP_TEXT = (
     "\U0001F4C8 /portfolio, /position ABC\n"
     "\U0001F4CB /stock ABC - Stock details (Lowest Price)\n"
     "\U0001F3C6 /top_orders, /top_tickers"
+)
+
+# Shown only to admins (appended to HELP_TEXT for them).
+ADMIN_HELP = (
+    "\n\n\U0001F512 Admin:\n"
+    "/setgold <bid> <ask> - Set today's gold (per chi)\n"
+    "/setrate <bid> <ask> [BASE TARGET] - Set FX rate (default USD KHR)"
 )
 
 
@@ -114,11 +122,84 @@ class TelegramBotService:
                 self._show_all(account_id, chat_id)
             elif command == "gold":
                 self._gold(chat_id)
+            elif command == "setgold":
+                self._set_gold(user_id, chat_id, remainder)
+            elif command == "setrate":
+                self._set_rate(user_id, chat_id, remainder)
             else:
-                self.client.send_message(chat_id, HELP_TEXT)
+                self.client.send_message(chat_id, HELP_TEXT + (ADMIN_HELP if self._is_admin(user_id) else ""))
         except Exception as e:
             logger.error(f"Telegram command '{command}' failed: {e}", exc_info=True)
             self.client.send_message(chat_id, "❌ Something went wrong. Please try again.")
+
+    # --- Admin: set gold / FX rate (text commands) ---
+
+    def _is_admin(self, user_id: str) -> bool:
+        """True only if the canonical account behind this Telegram id is an admin."""
+        account_id = self.link_repo.get_primary(user_id)
+        user = self.user_repo.get_user(account_id) or self.user_repo.get_user(user_id)
+        return bool(user and user.get("role") == "admin")
+
+    def _set_gold(self, user_id: str, chat_id: int, remainder: str) -> None:
+        """/setgold <bid> <ask> — save today's local gold (XAU-KH), same path as
+        the admin form. bid = higher លក់ចេញ/sell-out, ask = lower ទិញចូល/buy-in."""
+        if not self._is_admin(user_id):
+            self.client.send_message(chat_id, "🔒 Only admins can set the gold price.")
+            return
+        parts = remainder.split()
+        if len(parts) < 2:
+            self.client.send_message(
+                chat_id,
+                "Usage: /setgold <bid> <ask>\nExample: /setgold 510 505\n"
+                "(bid = លក់ចេញ / higher, ask = ទិញចូល / lower)")
+            return
+        try:
+            bid, ask = float(parts[0]), float(parts[1])
+        except ValueError:
+            self.client.send_message(chat_id, "Bid and ask must be numbers, e.g. /setgold 510 505")
+            return
+        if bid <= 0 or ask <= 0:
+            self.client.send_message(chat_id, "Bid and ask must be positive.")
+            return
+        today = date.today()
+        mid = (bid + ask) / 2
+        PriceHistoryRepository().upsert_snapshot(
+            "XAU-KH", today, mid, market="GOLD_KH", bid_price=bid, ask_price=ask)
+        self.client.send_message(
+            chat_id,
+            f"✅ Gold saved for {today.isoformat()}\n"
+            f"  bid (លក់ចេញ) = ${bid:,.2f}\n  ask (ទិញចូល) = ${ask:,.2f}\n  mid = ${mid:,.2f}")
+
+    def _set_rate(self, user_id: str, chat_id: int, remainder: str) -> None:
+        """/setrate <bid> <ask> [BASE TARGET] — save an FX rate (default USD→KHR),
+        same path as the admin exchange-rates form."""
+        if not self._is_admin(user_id):
+            self.client.send_message(chat_id, "🔒 Only admins can set the exchange rate.")
+            return
+        parts = remainder.split()
+        if len(parts) < 2:
+            self.client.send_message(
+                chat_id,
+                "Usage: /setrate <bid> <ask> [BASE TARGET]\n"
+                "Example: /setrate 4100 4120   (USD→KHR)")
+            return
+        try:
+            bid, ask = float(parts[0]), float(parts[1])
+        except ValueError:
+            self.client.send_message(chat_id, "Bid and ask must be numbers, e.g. /setrate 4100 4120")
+            return
+        if bid <= 0 or ask <= 0:
+            self.client.send_message(chat_id, "Rates must be positive.")
+            return
+        base = parts[2].upper() if len(parts) >= 3 else "USD"
+        target = parts[3].upper() if len(parts) >= 4 else "KHR"
+        account_id = self.link_repo.get_primary(user_id)
+        today = date.today().isoformat()
+        ExchangeRateRepository().add_rate(base, target, bid, ask, today, created_by=account_id)
+        self.client.send_message(
+            chat_id,
+            f"✅ FX rate saved for {today}\n  {base}→{target}\n"
+            f"  bid = {bid:,.2f}\n  ask = {ask:,.2f}")
 
     # --- Gold price ---
 
@@ -151,9 +232,7 @@ class TelegramBotService:
         """An admin sends the daily gold board photo -> OCR it -> save the gold
         price via the same path as the manual admin form (upsert XAU-KH with
         bid/ask). Only the canonical account's role is trusted."""
-        account_id = self.link_repo.get_primary(user_id)
-        user = self.user_repo.get_user(account_id) or self.user_repo.get_user(user_id)
-        if not user or user.get("role") != "admin":
+        if not self._is_admin(user_id):
             self.client.send_message(chat_id, "🔒 Only an admin can set the gold price from a photo.")
             return
 
