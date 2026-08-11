@@ -16,7 +16,14 @@ dependencies = [
     "pyjwt",
     "redis",
     "anthropic",
-    # Gold-board photo OCR (Telegram admin flow). ONNX-based, no PyTorch.
+]
+
+# Gold-board photo OCR (Telegram admin flow) is OPTIONAL — these are heavy
+# (onnxruntime + opencv) and can break a slim cloud build. `services/gold_ocr`
+# imports them lazily and the bot degrades to "OCR not available" without them.
+# Install where you want the photo flow to run:  pip install '.[ocr]'
+[project.optional-dependencies]
+ocr = [
     "rapidocr-onnxruntime",
     "opencv-python-headless",
     "numpy",
