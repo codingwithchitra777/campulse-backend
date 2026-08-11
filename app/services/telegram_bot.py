@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 HELP_TEXT = (
     "\U0001F680 CamPulse ✅\n\n"
     "\U0001F4CA /price$ABC or /show_all\n"
+    "\U0001F947 /gold - Today's gold price\n"
     "\U0001F4BC /buy$ABC 7300 100\n"
     "\U0001F4BC /sell$ABC 7400 100\n"
     "\U0001F4C8 /portfolio, /position ABC\n"
@@ -111,11 +112,37 @@ class TelegramBotService:
                 self._price(account_id, chat_id, remainder)
             elif command == "show_all":
                 self._show_all(account_id, chat_id)
+            elif command == "gold":
+                self._gold(chat_id)
             else:
                 self.client.send_message(chat_id, HELP_TEXT)
         except Exception as e:
             logger.error(f"Telegram command '{command}' failed: {e}", exc_info=True)
             self.client.send_message(chat_id, "❌ Something went wrong. Please try again.")
+
+    # --- Gold price ---
+
+    def _gold(self, chat_id: int) -> None:
+        """Show the latest saved local gold price (XAU-KH, per chi)."""
+        rows = PriceHistoryRepository().get_history(["XAU-KH"])
+        if not rows:
+            self.client.send_message(chat_id, "🥇 No gold price recorded yet.")
+            return
+        latest = rows[-1]  # get_history is ordered oldest → newest
+
+        def fmt(v):
+            return f"${float(v):,.2f}" if v is not None else "—"
+
+        bid, ask, mid = latest.get("bidPrice"), latest.get("askPrice"), latest.get("price")
+        lines = [
+            "🥇 Gold (XAU-KH) · per chi",
+            f"As of {latest.get('date')}",
+            f"  Bid (លក់ចេញ): {fmt(bid)}",
+            f"  Ask (ទិញចូល): {fmt(ask)}",
+        ]
+        if mid is not None:
+            lines.append(f"  Mid: {fmt(mid)}")
+        self.client.send_message(chat_id, "\n".join(lines))
 
     # --- Gold price board photo (admin only) ---
 

@@ -107,6 +107,28 @@ def test_gold_photo_admin_saves(monkeypatch):
         _cleanup(uid)
 
 
+def test_gold_command_shows_latest(monkeypatch):
+    monkeypatch.setattr(
+        PriceHistoryRepository, "get_history",
+        lambda self, tickers: [
+            {"date": "2026-01-01", "price": 400, "bidPrice": 405, "askPrice": 395},
+            {"date": "2026-08-10", "price": 516.5, "bidPrice": 519, "askPrice": 514},
+        ],
+    )
+    client = FakeClient()
+    TelegramBotService(client=client)._gold(111)
+    msg = "\n".join(client.messages)
+    assert "2026-08-10" in msg           # newest, not the older row
+    assert "$519.00" in msg and "$514.00" in msg and "$516.50" in msg
+
+
+def test_gold_command_empty(monkeypatch):
+    monkeypatch.setattr(PriceHistoryRepository, "get_history", lambda self, tickers: [])
+    client = FakeClient()
+    TelegramBotService(client=client)._gold(111)
+    assert any("no gold" in m.lower() for m in client.messages)
+
+
 def test_gold_photo_caption_picks_row(monkeypatch):
     uid = _mk_user("admin")
     monkeypatch.setattr(
