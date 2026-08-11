@@ -14,7 +14,7 @@ jobs:
           FASTAPI_CLOUD_APP_ID: ${{ secrets.FASTAPI_CLOUD_APP_ID }}
       - name: Notify deploy success
         run: |
-          curl -sf -X POST "https://campulse-backend.fastapicloud.dev/api/internal/deploy-notify" \
+          curl -sf -X POST "https://api.cambopulse.com/api/internal/deploy-notify" \
             -H "Content-Type: application/json" \
             -H "X-Deploy-Secret: ${{ secrets.DEPLOY_NOTIFY_SECRET }}" \
             -d "{\"service\": \"backend\", \"commit\": \"${{ github.sha }}\"}"
