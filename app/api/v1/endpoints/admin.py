@@ -1,9 +1,8 @@
 import logging
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import (get_user_repo, get_trade_repo, get_alloc_repo, get_current_user,
-                          require_admin, get_manual_price_repo, get_corp_action_repo, get_exchange_rate_repo)
-from app.schemas.admin import (RoleUpdateRequest, AdminStats, ManualPriceRequest,
+                          require_admin, get_corp_action_repo, get_exchange_rate_repo)
+from app.schemas.admin import (RoleUpdateRequest, AdminStats,
                                CorporateActionCreate, ExchangeRateCreate, GoldPriceCreate)
 from app.repositories.price_history import PriceHistoryRepository
 from app.services import markets
@@ -76,56 +75,6 @@ def list_all_trades(
         }
     except Exception as e:
         logger.error(f"Error in list_all_trades: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/admin/manual-prices")
-def list_manual_prices(
-    _admin = Depends(require_admin),
-    manual_repo = Depends(get_manual_price_repo)
-):
-    try:
-        return {"items": manual_repo.list_all()}
-    except Exception as e:
-        logger.error(f"Error in list_manual_prices: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.put("/admin/manual-price")
-def set_manual_price(
-    req: ManualPriceRequest,
-    current_user = Depends(get_current_user),
-    _admin = Depends(require_admin),
-    manual_repo = Depends(get_manual_price_repo)
-):
-    """Set the admin board price for a manually-priced instrument (local gold).
-    Also snapshots today's price so the equity chart can value the holding."""
-    try:
-        market = markets.normalize_market(req.market)
-        if market not in markets.MANUAL_MARKETS:
-            raise HTTPException(status_code=400, detail=f"{market} is not an admin-priced market")
-        if req.price <= 0:
-            raise HTTPException(status_code=400, detail="Price must be positive")
-        symbol = req.symbol.upper()
-        manual_repo.upsert(
-            market, symbol, req.price, currency=req.currency.upper(),
-            change=req.change, updated_by=current_user.user_id,
-            bid_price=req.bidPrice, ask_price=req.askPrice
-        )
-        # Daily snapshot for the equity series (best-effort).
-        try:
-            PriceHistoryRepository().upsert_snapshot(
-                symbol, datetime.utcnow().date(), req.price, market=market,
-                bid_price=req.bidPrice, ask_price=req.askPrice
-            )
-        except Exception as snap_err:
-            logger.warning(f"manual-price snapshot failed for {symbol}: {snap_err}")
-        return {"success": True, "market": market, "symbol": symbol,
-                "price": req.price, "currency": req.currency.upper()}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in set_manual_price: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

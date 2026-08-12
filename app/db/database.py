@@ -312,9 +312,12 @@ def init_db(conn):
             );
         """)
 
-        # Phase 3 — admin-maintained prices for instruments with no live feed
-        # (local Cambodian gold: no free API, so an admin sets the daily board).
-        # One current row per (market, symbol); the ManualProvider reads it.
+        # Orphaned as of the price-source consolidation: ManualProvider now reads
+        # price_history (the table /setgold, the gold-OCR flow, and
+        # /api/admin/gold-history all write to) instead of this table, which is
+        # why it went stale and caused wrong portfolio valuations. Left here
+        # (idempotent, no data loss) rather than dropped; safe to remove for real
+        # once confirmed nothing still queries it directly.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS manual_prices (
                 market VARCHAR(16) NOT NULL,

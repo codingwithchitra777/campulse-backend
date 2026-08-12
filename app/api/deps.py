@@ -5,7 +5,6 @@ from app.repositories.trade import TradeRepository
 from app.repositories.allocation import AllocationRepository
 from app.repositories.user import UserRepository
 from app.repositories.link import LinkRepository
-from app.repositories.manual_price import ManualPriceRepository
 from app.repositories.watchlist import WatchlistRepository
 from app.repositories.alert import AlertRepository
 from app.repositories.ai_insight import AIInsightRepository
@@ -55,9 +54,6 @@ def get_user_repo() -> UserRepository:
 
 def get_link_repo() -> LinkRepository:
     return LinkRepository()
-
-def get_manual_price_repo() -> ManualPriceRepository:
-    return ManualPriceRepository()
 
 def get_watchlist_repo() -> WatchlistRepository:
     return WatchlistRepository()
