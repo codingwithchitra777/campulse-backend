@@ -206,6 +206,36 @@ def test_setrate_admin_saves(monkeypatch):
         _cleanup(uid)
 
 
+def test_setrate_admin_with_currency_and_date(monkeypatch):
+    uid = _mk_user("admin")
+    captured = {}
+    monkeypatch.setattr(
+        ExchangeRateRepository, "add_rate",
+        lambda self, base, target, bid, ask, eff, created_by=None:
+            (captured.update(base=base, target=target, bid=bid, ask=ask, eff=eff) or {}))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_rate(uid, 111, "4100 4120 USD KHR 2026-08-10")
+        assert captured == {"base": "USD", "target": "KHR", "bid": 4100.0, "ask": 4120.0, "eff": "2026-08-10"}
+    finally:
+        _cleanup(uid)
+
+
+def test_setrate_admin_with_date_only(monkeypatch):
+    uid = _mk_user("admin")
+    captured = {}
+    monkeypatch.setattr(
+        ExchangeRateRepository, "add_rate",
+        lambda self, base, target, bid, ask, eff, created_by=None:
+            (captured.update(base=base, target=target, eff=eff) or {}))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_rate(uid, 111, "4100 4120 2026-08-10")
+        assert captured == {"base": "USD", "target": "KHR", "eff": "2026-08-10"}
+    finally:
+        _cleanup(uid)
+
+
 def test_setrate_rejects_non_admin(monkeypatch):
     uid = _mk_user("user")
     called = {"n": 0}

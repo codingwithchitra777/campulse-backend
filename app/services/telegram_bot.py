@@ -38,7 +38,7 @@ HELP_TEXT = (
 ADMIN_HELP = (
     "\n\n\U0001F512 Admin:\n"
     "/setgold <bid> <ask> [YYYY-MM-DD] - Set gold for a date, default today (per chi)\n"
-    "/setrate <bid> <ask> [BASE TARGET] - Set FX rate (default USD KHR)"
+    "/setrate <bid> <ask> [BASE TARGET] [YYYY-MM-DD] - Set FX rate (default USD KHR, default today)"
 )
 
 
@@ -183,8 +183,12 @@ class TelegramBotService:
             f"  bid (លក់ចេញ) = ${bid:,.2f}\n  ask (ទិញចូល) = ${ask:,.2f}\n  mid = ${mid:,.2f}")
 
     def _set_rate(self, user_id: str, chat_id: int, remainder: str) -> None:
-        """/setrate <bid> <ask> [BASE TARGET] — save an FX rate (default USD→KHR),
-        same path as the admin exchange-rates form."""
+        """/setrate <bid> <ask> [BASE TARGET] [YYYY-MM-DD] — save an FX rate
+        (default USD→KHR, default today), same path as the admin exchange-rates
+        form. The date can appear anywhere after bid/ask; whichever token parses
+        as YYYY-MM-DD is taken as the date, the rest are read as BASE then
+        TARGET. Calling it again for the same date overwrites that date's rate —
+        you can update it as many times a day as you like."""
         if not self._is_admin(user_id):
             self.client.send_message(chat_id, "🔒 Only admins can set the exchange rate.")
             return
@@ -192,8 +196,9 @@ class TelegramBotService:
         if len(parts) < 2:
             self.client.send_message(
                 chat_id,
-                "Usage: /setrate <bid> <ask> [BASE TARGET]\n"
-                "Example: /setrate 4100 4120   (USD→KHR)")
+                "Usage: /setrate <bid> <ask> [BASE TARGET] [YYYY-MM-DD]\n"
+                "Example: /setrate 4100 4120   (USD→KHR, today)\n"
+                "or /setrate 4100 4120 USD KHR 2026-08-10")
             return
         try:
             bid, ask = float(parts[0]), float(parts[1])
@@ -203,14 +208,24 @@ class TelegramBotService:
         if bid <= 0 or ask <= 0:
             self.client.send_message(chat_id, "Rates must be positive.")
             return
-        base = parts[2].upper() if len(parts) >= 3 else "USD"
-        target = parts[3].upper() if len(parts) >= 4 else "KHR"
+        rest = parts[2:]
+        snapshot_date = date.today()
+        for i, token in enumerate(rest):
+            try:
+                snapshot_date = date.fromisoformat(token)
+            except ValueError:
+                continue
+            else:
+                del rest[i]
+                break
+        base = rest[0].upper() if len(rest) >= 1 else "USD"
+        target = rest[1].upper() if len(rest) >= 2 else "KHR"
         account_id = self.link_repo.get_primary(user_id)
-        today = date.today().isoformat()
-        ExchangeRateRepository().add_rate(base, target, bid, ask, today, created_by=account_id)
+        rate_date = snapshot_date.isoformat()
+        ExchangeRateRepository().add_rate(base, target, bid, ask, rate_date, created_by=account_id)
         self.client.send_message(
             chat_id,
-            f"✅ FX rate saved for {today}\n  {base}→{target}\n"
+            f"✅ FX rate saved for {rate_date}\n  {base}→{target}\n"
             f"  bid = {bid:,.2f}\n  ask = {ask:,.2f}")
 
     # --- Gold price ---
