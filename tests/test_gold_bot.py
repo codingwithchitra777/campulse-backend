@@ -5,6 +5,7 @@ mock the client + OCR + the DB write, so they never run slow OCR or touch the
 real XAU-KH gold row. Disposable ids, cleaned up by exact id.
 """
 import uuid
+from datetime import date
 
 import numpy as np
 import pytest
@@ -142,6 +143,36 @@ def test_setgold_admin_saves(monkeypatch):
         TelegramBotService(client=client)._set_gold(uid, 111, "510 505")
         assert captured == {"ticker": "XAU-KH", "market": "GOLD_KH", "bid": 510.0, "ask": 505.0}
         assert any("saved" in m.lower() for m in client.messages)
+    finally:
+        _cleanup(uid)
+
+
+def test_setgold_admin_with_explicit_date(monkeypatch):
+    uid = _mk_user("admin")
+    captured = {}
+    monkeypatch.setattr(
+        PriceHistoryRepository, "upsert_snapshot",
+        lambda self, t, d, p, market="CSX", bid_price=None, ask_price=None:
+            captured.update(ticker=t, date=d, market=market, bid=bid_price, ask=ask_price))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_gold(uid, 111, "510 505 2026-08-10")
+        assert captured["date"] == date(2026, 8, 10)
+        assert any("2026-08-10" in m for m in client.messages)
+    finally:
+        _cleanup(uid)
+
+
+def test_setgold_admin_rejects_bad_date(monkeypatch):
+    uid = _mk_user("admin")
+    called = {"n": 0}
+    monkeypatch.setattr(PriceHistoryRepository, "upsert_snapshot",
+                        lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+    client = FakeClient()
+    try:
+        TelegramBotService(client=client)._set_gold(uid, 111, "510 505 not-a-date")
+        assert called["n"] == 0
+        assert any("yyyy-mm-dd" in m.lower() for m in client.messages)
     finally:
         _cleanup(uid)
 

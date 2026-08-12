@@ -37,7 +37,7 @@ HELP_TEXT = (
 # Shown only to admins (appended to HELP_TEXT for them).
 ADMIN_HELP = (
     "\n\n\U0001F512 Admin:\n"
-    "/setgold <bid> <ask> - Set today's gold (per chi)\n"
+    "/setgold <bid> <ask> [YYYY-MM-DD] - Set gold for a date, default today (per chi)\n"
     "/setrate <bid> <ask> [BASE TARGET] - Set FX rate (default USD KHR)"
 )
 
@@ -141,8 +141,11 @@ class TelegramBotService:
         return bool(user and user.get("role") == "admin")
 
     def _set_gold(self, user_id: str, chat_id: int, remainder: str) -> None:
-        """/setgold <bid> <ask> — save today's local gold (XAU-KH), same path as
-        the admin form. bid = higher លក់ចេញ/sell-out, ask = lower ទិញចូល/buy-in."""
+        """/setgold <bid> <ask> [YYYY-MM-DD] — save local gold (XAU-KH) for a date
+        (defaults to today), same path as the admin form. bid = higher
+        លក់ចេញ/sell-out, ask = lower ទិញចូល/buy-in. Calling it again for the same
+        date overwrites that date's price — same as a live board, gold can be
+        updated multiple times a day and the latest call wins."""
         if not self._is_admin(user_id):
             self.client.send_message(chat_id, "🔒 Only admins can set the gold price.")
             return
@@ -150,8 +153,10 @@ class TelegramBotService:
         if len(parts) < 2:
             self.client.send_message(
                 chat_id,
-                "Usage: /setgold <bid> <ask>\nExample: /setgold 510 505\n"
-                "(bid = លក់ចេញ / higher, ask = ទិញចូល / lower)")
+                "Usage: /setgold <bid> <ask> [YYYY-MM-DD]\nExample: /setgold 510 505 (today) "
+                "or /setgold 510 505 2026-08-10\n"
+                "(bid = លក់ចេញ / higher, ask = ទិញចូល / lower). Calling it again for the same "
+                "date overwrites that date's price — you can update it as many times a day as you like.")
             return
         try:
             bid, ask = float(parts[0]), float(parts[1])
@@ -161,13 +166,20 @@ class TelegramBotService:
         if bid <= 0 or ask <= 0:
             self.client.send_message(chat_id, "Bid and ask must be positive.")
             return
-        today = date.today()
+        if len(parts) >= 3:
+            try:
+                snapshot_date = date.fromisoformat(parts[2])
+            except ValueError:
+                self.client.send_message(chat_id, "Date must be YYYY-MM-DD, e.g. /setgold 510 505 2026-08-10")
+                return
+        else:
+            snapshot_date = date.today()
         mid = (bid + ask) / 2
         PriceHistoryRepository().upsert_snapshot(
-            "XAU-KH", today, mid, market="GOLD_KH", bid_price=bid, ask_price=ask)
+            "XAU-KH", snapshot_date, mid, market="GOLD_KH", bid_price=bid, ask_price=ask)
         self.client.send_message(
             chat_id,
-            f"✅ Gold saved for {today.isoformat()}\n"
+            f"✅ Gold saved for {snapshot_date.isoformat()}\n"
             f"  bid (លក់ចេញ) = ${bid:,.2f}\n  ask (ទិញចូល) = ${ask:,.2f}\n  mid = ${mid:,.2f}")
 
     def _set_rate(self, user_id: str, chat_id: int, remainder: str) -> None:
