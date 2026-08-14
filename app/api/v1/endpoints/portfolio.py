@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
@@ -28,10 +27,13 @@ def get_position(
         buys = [t for t in trades if t["side"] == "BUY"]
         sells = [t for t in trades if t["side"] == "SELL"]
 
-        # Buys list
-        remaining_lots = pos.get("remainingLots", [])
+        # Buys list — open lots only (fully-matched/sold buys are already
+        # reflected in realisedPnl and the sell orders' matched breakdown, so
+        # repeating them here would just duplicate that view).
         chart_buys = []
-        for lot in remaining_lots:
+        for lot in pos.get("remainingLots", []):
+            if lot["qtyOpen"] <= 0:
+                continue
             chart_buys.append({
                 "seq": lot["seq"],
                 "qtyOriginal": lot["qtyOriginal"],
@@ -66,15 +68,7 @@ def get_position(
 
         # Realised P/L
         realised_pnl = sum(float(a["realisedPnl"]) for a in allocations)
-        
-        # Format datetime orderDate fields for remainingLots
-        serialized_lots = []
-        for lot in pos.get("remainingLots", []):
-            serialized_lot = dict(lot)
-            if isinstance(serialized_lot.get("orderDate"), datetime):
-                serialized_lot["orderDate"] = serialized_lot["orderDate"].isoformat()
-            serialized_lots.append(serialized_lot)
-        
+
         return {
             "ticker": symbol.upper(),
             "totalBoughtQty": pos["totalBoughtQty"],
@@ -84,7 +78,6 @@ def get_position(
             "realisedPnl": realised_pnl,
             "buys": chart_buys,
             "sells": chart_sells,
-            "remainingLots": serialized_lots
         }
     except Exception as e:
         logger.error(f"Error in get_position: {e}", exc_info=True)

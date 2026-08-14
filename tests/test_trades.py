@@ -338,6 +338,28 @@ def test_delete_matched_sell_trade_restores_position_qty(user_id):
     assert pos_after["remainingQty"] == 10
 
 
+def test_position_buys_excludes_fully_sold_lots(user_id):
+    """/api/position's `buys` is open lots only — a lot fully consumed by a
+    sell shouldn't reappear here (it's already reflected in realisedPnl and
+    the matching sell's `matched` breakdown). There's no separate
+    `remainingLots` field anymore either; `buys` is the one source for it."""
+    client.post("/api/trades", headers=auth_headers(user_id),
+               json={"ticker": "abc", "side": "BUY", "price": 100, "qty": 10})
+    client.post("/api/trades", headers=auth_headers(user_id),
+               json={"ticker": "abc", "side": "BUY", "price": 110, "qty": 5})
+    client.post("/api/trades", headers=auth_headers(user_id),
+               json={"ticker": "abc", "side": "SELL", "price": 150, "qty": 10})
+
+    pos = client.get("/api/position/abc", headers=auth_headers(user_id)).json()
+    assert "remainingLots" not in pos
+    buy_seqs = {b["seq"]: b for b in pos["buys"]}
+    # The cheaper lot (100) is fully consumed by the sell — excluded.
+    assert all(b["qtyOpen"] > 0 for b in pos["buys"])
+    assert not any(b["price"] == 100 for b in buy_seqs.values())
+    # The pricier lot (110) is untouched — still listed, fully open.
+    assert any(b["price"] == 110 and b["qtyOpen"] == 5 for b in buy_seqs.values())
+
+
 def test_backdated_trade_persists_and_flows_to_reports(user_id):
     client.post(
         "/api/trades",
