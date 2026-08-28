@@ -325,3 +325,128 @@ class PortfolioService:
                 "realisedPnl": pnl
             })
         return out
+
+    def profitable_open_lots(self, user_id: str, limit: int = 10, offset: int = 0,
+                             valuation_mode: str = "BID") -> Dict[str, Any]:
+        """Open buy lots across all holdings, ranked by current unrealised P/L.
+
+        Per lot: unrealised = (current price - buy price) * qtyOpen, market-aware
+        and per-currency (never blended). Lots whose market has no live price
+        sort last with a null unrealised. Paginated for the Top Lots list.
+        """
+        all_trades = self.trade_repo.list_trades(user_id)
+        # One ticker == one market; fix meta from the first trade seen.
+        meta: Dict[str, tuple] = {}
+        for t in all_trades:
+            meta.setdefault(t["ticker"], (t.get("market", "CSX"), t.get("currency", "KHR")))
+
+        rows: List[Dict[str, Any]] = []
+        for ticker in meta:
+            market, currency = meta[ticker]
+            price_res = self.price_router.get_latest_price(market, ticker)
+            last_price = None
+            if price_res.price is not None:
+                if valuation_mode == "ASK":
+                    ask = price_res.raw.get("askPrice") if price_res.raw else None
+                    last_price = Decimal(str(ask)) if ask is not None else Decimal(str(price_res.price))
+                else:
+                    bid = price_res.raw.get("bidPrice") if price_res.raw else None
+                    last_price = Decimal(str(bid)) if bid is not None else Decimal(str(price_res.price))
+
+            pos = self.position_detail(user_id, ticker, market=market)
+            for lot in pos["remainingLots"]:
+                if lot["qtyOpen"] <= 0:
+                    continue
+                buy_price = Decimal(lot["price"])
+                qty = Decimal(lot["qtyOpen"])
+                cost_basis = markets.quantize_money(buy_price * qty, currency)
+                if last_price is not None:
+                    market_value = markets.quantize_money(last_price * qty, currency)
+                    unreal = markets.quantize_money((last_price - buy_price) * qty, currency)
+                    unreal_pct = float((last_price - buy_price) / buy_price * 100) if buy_price > 0 else 0.0
+                else:
+                    market_value = None
+                    unreal = None
+                    unreal_pct = None
+                order_date = lot.get("orderDate")
+                rows.append({
+                    "buyTradeId": lot["tradeId"],
+                    "seq": lot["seq"],
+                    "ticker": ticker,
+                    "market": market,
+                    "currency": currency,
+                    "buyPrice": buy_price,
+                    "qtyOpen": qty,
+                    "currentPrice": last_price,
+                    "costBasis": cost_basis,
+                    "marketValue": market_value,
+                    "unrealisedPnl": unreal,
+                    "unrealisedPnlPercent": unreal_pct,
+                    "orderDate": order_date.isoformat() if hasattr(order_date, "isoformat") else order_date,
+                })
+
+        # Rank by unrealised desc; lots without a live price (None) sort last.
+        rows.sort(
+            key=lambda r: (r["unrealisedPnl"] is not None,
+                           r["unrealisedPnl"] if r["unrealisedPnl"] is not None else Decimal(0)),
+            reverse=True,
+        )
+        total = len(rows)
+        return {"items": rows[offset:offset + limit], "total": total, "hasMore": offset + limit < total}
+
+    def profitable_closed_lots(self, user_id: str, limit: int = 10, offset: int = 0) -> Dict[str, Any]:
+        """Closed buy lots (realised via matched sells), ranked by realised P/L.
+
+        Groups allocations by their buy lot; each row is one buy lot with total
+        realised P/L, qty sold out of it, and its qty-weighted avg sell price.
+        """
+        allocs = self.alloc_repo.list_allocations(user_id)
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for a in allocs:
+            key = a["buyTradeId"]
+            g = grouped.get(key)
+            if g is None:
+                g = {
+                    "buyTradeId": key,
+                    "ticker": a["ticker"],
+                    "market": a.get("market", "CSX"),
+                    "currency": a.get("currency", "KHR"),
+                    "buyPrice": Decimal(a["buyPrice"]),
+                    "qtySold": Decimal(0),
+                    "realisedPnl": Decimal(0),
+                    "_sellValue": Decimal(0),
+                    "lastSellDate": a["createdAt"],
+                }
+                grouped[key] = g
+            qa = Decimal(a["qtyAllocated"])
+            g["qtySold"] += qa
+            g["realisedPnl"] += Decimal(a["realisedPnl"])
+            g["_sellValue"] += qa * Decimal(a["sellPrice"])
+            if a["createdAt"] and (g["lastSellDate"] is None or a["createdAt"] > g["lastSellDate"]):
+                g["lastSellDate"] = a["createdAt"]
+
+        trades = self.trade_repo.list_trades(user_id)
+        seq_map = {t["tradeId"]: t.get("seq") for t in trades}
+
+        rows: List[Dict[str, Any]] = []
+        for g in grouped.values():
+            qty_sold = g["qtySold"]
+            currency = g["currency"]
+            avg_sell = (g["_sellValue"] / qty_sold) if qty_sold > 0 else Decimal(0)
+            ld = g["lastSellDate"]
+            rows.append({
+                "buyTradeId": g["buyTradeId"],
+                "seq": seq_map.get(g["buyTradeId"]),
+                "ticker": g["ticker"],
+                "market": g["market"],
+                "currency": currency,
+                "buyPrice": g["buyPrice"],
+                "qtySold": qty_sold,
+                "avgSellPrice": markets.quantize_money(avg_sell, currency),
+                "realisedPnl": g["realisedPnl"],
+                "lastSellDate": ld.isoformat() if hasattr(ld, "isoformat") else ld,
+            })
+
+        rows.sort(key=lambda r: r["realisedPnl"], reverse=True)
+        total = len(rows)
+        return {"items": rows[offset:offset + limit], "total": total, "hasMore": offset + limit < total}
