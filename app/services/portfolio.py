@@ -331,7 +331,16 @@ class PortfolioService:
         return out
 
     def profitable_open_lots(self, user_id: str, limit: int = 10, offset: int = 0,
-                             valuation_mode: str = "BID") -> Dict[str, Any]:
+                             valuation_mode: str = "BID", order: str = "desc",
+                             only_losing: bool = False) -> Dict[str, Any]:
+        """Open buy lots across all holdings, ranked by current unrealised % gain.
+
+        Per lot: unrealised = (current price - buy price) * qtyOpen, market-aware
+        and per-currency (never blended); ranked by % gain so currencies compare
+        fairly. order='desc' = most profitable first (Top Lots), order='asc' =
+        worst first (Unprofitable tab). only_losing keeps just lots in the red.
+        Lots whose market has no live price sort last. Paginated.
+        """
         all_trades = self.trade_repo.list_trades(user_id)
         meta: Dict[str, tuple] = {}
         for t in all_trades:
@@ -371,9 +380,18 @@ class PortfolioService:
                     "unrealisedPnl": unreal, "unrealisedPnlPercent": unreal_pct,
                     "orderDate": order_date.isoformat() if hasattr(order_date, "isoformat") else order_date,
                 })
-        rows.sort(key=lambda r: (r["unrealisedPnl"] is not None,
-                                 r["unrealisedPnl"] if r["unrealisedPnl"] is not None else Decimal(0)),
-                  reverse=True)
+        if only_losing:
+            rows = [r for r in rows if r["unrealisedPnl"] is not None and r["unrealisedPnl"] < 0]
+
+        # Rank by unrealised % gain — currency-fair (a +20% riel lot outranks a
+        # +5% USD lot). desc = most profitable first; asc = worst first. Lots
+        # without a live price (None %) always sort last either way.
+        asc = order == "asc"
+        null_key = float("inf") if asc else float("-inf")
+        rows.sort(
+            key=lambda r: r["unrealisedPnlPercent"] if r["unrealisedPnlPercent"] is not None else null_key,
+            reverse=not asc,
+        )
         total = len(rows)
         return {"items": rows[offset:offset + limit], "total": total, "hasMore": offset + limit < total}
 
@@ -401,13 +419,18 @@ class PortfolioService:
         for g in grouped.values():
             qty_sold = g["qtySold"]; currency = g["currency"]
             avg_sell = (g["_sellValue"] / qty_sold) if qty_sold > 0 else Decimal(0)
+            # Realised % on the cost of the shares sold — currency-fair ranking key.
+            buy_cost = g["buyPrice"] * qty_sold
+            realised_pct = float(g["realisedPnl"] / buy_cost * 100) if buy_cost > 0 else 0.0
             ld = g["lastSellDate"]
             rows.append({
                 "buyTradeId": g["buyTradeId"], "seq": seq_map.get(g["buyTradeId"]), "ticker": g["ticker"],
                 "market": g["market"], "currency": currency, "buyPrice": g["buyPrice"], "qtySold": qty_sold,
                 "avgSellPrice": markets.quantize_money(avg_sell, currency), "realisedPnl": g["realisedPnl"],
+                "realisedPnlPercent": realised_pct,
                 "lastSellDate": ld.isoformat() if hasattr(ld, "isoformat") else ld,
             })
-        rows.sort(key=lambda r: r["realisedPnl"], reverse=True)
+        # Rank by realised % gain desc — currency-fair (see open-lots note).
+        rows.sort(key=lambda r: r["realisedPnlPercent"], reverse=True)
         total = len(rows)
         return {"items": rows[offset:offset + limit], "total": total, "hasMore": offset + limit < total}
