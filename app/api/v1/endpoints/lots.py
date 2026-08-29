@@ -40,3 +40,22 @@ def closed_lots(
     except Exception as e:
         logger.error(f"Error in closed_lots: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/lots/losing")
+def losing_lots(
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    valuationMode: str = Query(default="BID"),
+    current_user=Depends(get_current_user),
+    portfolio_service=Depends(get_portfolio_service),
+):
+    """Open buy lots currently at a loss, worst % first (Unprofitable tab)."""
+    try:
+        return portfolio_service.profitable_open_lots(
+            current_user.user_id, limit=limit, offset=offset,
+            valuation_mode=valuationMode, order="asc", only_losing=True,
+        )
+    except Exception as e:
+        logger.error(f"Error in losing_lots: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
