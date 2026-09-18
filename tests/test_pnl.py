@@ -24,13 +24,13 @@ def user_id():
 
 def _insert_matched_pair(user_id: str, ticker: str, year: int, seq: int,
                          buy_price: int, sell_price: int, qty: int,
-                         currency: str = "KHR") -> int:
+                         currency: str = "KHR", month: int = 6, day: int = 15) -> int:
     """Insert a backdated BUY+SELL pair with its allocation directly via the
     repositories — POST /api/trades always stamps utcnow(), so multi-year
     fixtures can't be created through the API. Returns the realised P/L."""
     trade_repo = TradeRepository()
     alloc_repo = AllocationRepository()
-    order_date = datetime(year, 6, 15, 10, 0, 0)
+    order_date = datetime(year, month, day, 10, 0, 0)
     buy_id = str(uuid.uuid4())
     sell_id = str(uuid.uuid4())
     trade_repo.add_trade({
@@ -132,6 +132,27 @@ def test_pnl_yearly_groups_by_sell_year(user_id):
     assert y2023["realisedPnl"] == pnl_2023
     assert y2023["sellCount"] == 1
     assert y2023["tickers"] == [{"ticker": "OLD", "realisedPnl": pnl_2023, "sellCount": 1}]
+
+
+def test_pnl_monthly_buckets(user_id):
+    _insert_matched_pair(user_id, "AAA", 2024, seq=1, buy_price=100, sell_price=150, qty=10, month=3)
+    _insert_matched_pair(user_id, "BBB", 2024, seq=3, buy_price=50, sell_price=90, qty=20, month=7)
+
+    rows = client.get("/api/pnl/yearly?period=month", headers=auth_headers(user_id)).json()
+    assert [r["label"] for r in rows] == ["Jul 2024", "Mar 2024"]  # newest first
+    # The same sells roll up into a single yearly bucket.
+    yrows = client.get("/api/pnl/yearly?period=year", headers=auth_headers(user_id)).json()
+    assert len(yrows) == 1 and yrows[0]["label"] == "2024"
+
+
+def test_pnl_weekly_buckets(user_id):
+    # Both Mondays (date_trunc('week') starts Monday), two weeks apart.
+    _insert_matched_pair(user_id, "AAA", 2024, seq=1, buy_price=100, sell_price=150, qty=10, month=3, day=4)
+    _insert_matched_pair(user_id, "BBB", 2024, seq=3, buy_price=50, sell_price=90, qty=20, month=3, day=18)
+
+    rows = client.get("/api/pnl/yearly?period=week", headers=auth_headers(user_id)).json()
+    assert [r["periodStart"] for r in rows] == ["2024-03-18", "2024-03-04"]  # newest first
+    assert rows[0]["label"] == "18–24 Mar 2024"
 
 
 def test_pnl_yearly_scoped_per_user(user_id):

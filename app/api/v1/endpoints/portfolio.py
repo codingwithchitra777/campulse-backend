@@ -108,11 +108,14 @@ def get_analytics(
 
 @router.get("/pnl/yearly")
 def get_pnl_yearly(
+    period: str = "year",
     current_user = Depends(get_current_user),
     portfolio_service = Depends(get_portfolio_service)
 ):
+    """Realised P/L bucketed by ?period=week|month|year (default year),
+    per currency, newest first."""
     try:
-        return portfolio_service.realised_pnl_by_year(current_user.user_id)
+        return portfolio_service.realised_pnl_by_period(current_user.user_id, period)
     except Exception as e:
         logger.error(f"Error in get_pnl_yearly: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

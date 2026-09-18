@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
 
 from app.repositories.trade import TradeRepository
@@ -150,15 +151,33 @@ class PortfolioService:
             })
         return result
 
-    def realised_pnl_by_year(self, user_id: str) -> List[Dict[str, Any]]:
-        rows = self.alloc_repo.realised_pnl_by_year(user_id)
-        # Group per (year, currency) — KHR and USD P/L are never summed together
-        # (blending currencies would be a meaningless money figure).
+    @staticmethod
+    def _period_label(period: str, start) -> str:
+        """Human label for a period bucket (start is a date)."""
+        if period == "month":
+            return start.strftime("%b %Y")            # "Sep 2026"
+        if period == "week":
+            end = start + timedelta(days=6)
+            if start.month == end.month:
+                return f"{start.day}–{end.day} {start.strftime('%b %Y')}"   # "15–21 Sep 2026"
+            return f"{start.day} {start.strftime('%b')} – {end.day} {end.strftime('%b %Y')}"
+        return str(start.year)                         # "2026"
+
+    def realised_pnl_by_period(self, user_id: str, period: str = "year") -> List[Dict[str, Any]]:
+        """Realised P/L grouped by (period bucket, currency) — newest first.
+        KHR and USD are never summed together. `period` ∈ {week, month, year}."""
+        if period not in ("week", "month", "year"):
+            period = "year"
+        rows = self.alloc_repo.realised_pnl_by_period(user_id, period)
         groups: Dict[tuple, Dict[str, Any]] = {}
         for r in rows:
-            key = (r["year"], r["currency"])
+            start = r["periodStart"]  # date
+            key = (start, r["currency"])
             g = groups.setdefault(key, {
-                "year": r["year"],
+                "period": period,
+                "periodStart": start.isoformat(),
+                "year": start.year,
+                "label": self._period_label(period, start),
                 "currency": r["currency"],
                 "realisedPnl": 0.0,
                 "sellCount": 0,
@@ -172,7 +191,9 @@ class PortfolioService:
                 "realisedPnl": r["realisedPnl"],
                 "sellCount": r["sellCount"]
             })
-        out = sorted(groups.values(), key=lambda x: (-x["year"], x["currency"]))
+        # Newest period first, currency ascending within a period (stable sort).
+        out = sorted(groups.values(), key=lambda x: x["currency"])
+        out.sort(key=lambda x: x["periodStart"], reverse=True)
         for g in out:
             g["tickers"].sort(key=lambda t: t["realisedPnl"], reverse=True)
         return out

@@ -82,14 +82,16 @@ class AllocationRepository:
                 )
                 return cur.fetchone()[0]
 
-    def realised_pnl_by_year(self, user_id: str) -> List[Dict[str, Any]]:
-        # Grouped on the SELL trade's order_date, not allocations.created_at —
-        # the two coincide for live trades but diverge for backdated data.
+    def realised_pnl_by_period(self, user_id: str, period: str = "year") -> List[Dict[str, Any]]:
+        # Realised P/L bucketed by week / month / year of the SELL trade's
+        # order_date (not allocations.created_at — they diverge for backdated
+        # data). `period` is validated by the caller; passed as date_trunc's
+        # (text) field, so parameterising it is injection-safe.
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                      """
-                     SELECT EXTRACT(YEAR FROM t.order_date)::INT AS year,
+                     SELECT date_trunc(%s, t.order_date)::date AS period_start,
                             a.currency,
                             a.ticker,
                             SUM(a.realised_pnl) AS realised_pnl,
@@ -100,12 +102,12 @@ class AllocationRepository:
                      GROUP BY 1, 2, 3
                      ORDER BY 1 DESC, 2 ASC, 4 DESC
                      """,
-                     (user_id,)
+                     (period, user_id)
                 )
                 rows = cur.fetchall()
                 return [
                      {
-                         "year": r[0],
+                         "periodStart": r[0],   # date
                          "currency": r[1],
                          "ticker": r[2],
                          "realisedPnl": float(r[3]),
