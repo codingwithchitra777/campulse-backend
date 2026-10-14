@@ -20,10 +20,13 @@ def _url(method: str) -> str:
     return f"{_BASE}/bot{settings.telegram_token}/{method}"
 
 
-def send_message(chat_id: int, text: str, parse_mode: Optional[str] = None) -> None:
+def send_message(chat_id: int, text: str, parse_mode: Optional[str] = None,
+                 reply_to: Optional[int] = None) -> None:
     payload = {"chat_id": chat_id, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    if reply_to:
+        payload["reply_parameters"] = {"message_id": reply_to, "allow_sending_without_reply": True}
     try:
         resp = requests.post(_url("sendMessage"), json=payload, timeout=10)
         resp.raise_for_status()
@@ -32,7 +35,7 @@ def send_message(chat_id: int, text: str, parse_mode: Optional[str] = None) -> N
             retry_after = e.response.json().get("parameters", {}).get("retry_after", 3)
             logger.warning(f"Rate limited (429). Retry after {retry_after}s for chat {chat_id}")
             time.sleep(retry_after)
-            return send_message(chat_id, text, parse_mode)
+            return send_message(chat_id, text, parse_mode, reply_to)
         logger.error(f"Telegram sendMessage failed (chat {chat_id}): {e}")
     except Exception as e:
         logger.error(f"Telegram sendMessage failed (chat {chat_id}): {e}")

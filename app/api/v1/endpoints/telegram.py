@@ -18,6 +18,14 @@ def _handle_gold_image(user_id: str, chat_id: int, full_name: str, file_id: str,
         logger.error(f"Telegram gold-image handler error: {e}", exc_info=True)
 
 
+def _handle_voice(chat_id: int, file_id: str, message_id) -> None:
+    # Runs off the request thread: Whisper on CPU takes seconds per 10s of audio.
+    try:
+        TelegramBotService().handle_voice(chat_id, file_id, message_id)
+    except Exception as e:
+        logger.error(f"Telegram voice handler error: {e}", exc_info=True)
+
+
 @router.post("/telegram/webhook")
 async def telegram_webhook(
     request: Request,
@@ -52,6 +60,18 @@ async def telegram_webhook(
             threading.Thread(
                 target=_handle_gold_image,
                 args=(user_id, chat_id, full_name, file_id, message.get("caption") or ""),
+                daemon=True,
+            ).start()
+        return {"ok": True}
+
+    # Voice note / audio file → Khmer speech-to-text reply. Offloaded like photos.
+    voice = message.get("voice") or message.get("audio")
+    if voice:
+        file_id = voice.get("file_id")
+        if file_id:
+            threading.Thread(
+                target=_handle_voice,
+                args=(chat_id, file_id, message.get("message_id")),
                 daemon=True,
             ).start()
         return {"ok": True}

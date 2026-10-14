@@ -252,6 +252,30 @@ class TelegramBotService:
             lines.append(f"  Mid: {fmt(mid)}")
         self.client.send_message(chat_id, "\n".join(lines))
 
+    # --- Voice message -> Khmer text ---
+
+    def handle_voice(self, chat_id: int, file_id: str, message_id: Optional[int] = None) -> None:
+        """Transcribe a voice/audio message with the Khmer Whisper model and
+        reply to it with the text."""
+        audio = self.client.download_file(file_id)
+        if not audio:
+            self.client.send_message(chat_id, "❌ Couldn't download that voice message. Send it again.")
+            return
+
+        try:
+            from app.services.transcriber import transcribe
+            text = transcribe(audio)
+        except ImportError:
+            self.client.send_message(chat_id, "❌ Voice transcription isn't available on the server.")
+            return
+        except Exception as e:
+            logger.error(f"voice transcription failed: {e}", exc_info=True)
+            self.client.send_message(chat_id, "❌ Couldn't transcribe this voice message.")
+            return
+
+        # Telegram caps a message at 4096 chars.
+        self.client.send_message(chat_id, (text or "🤷 No speech detected")[:4096], reply_to=message_id)
+
     # --- Gold price board photo (admin only) ---
 
     def handle_gold_image(self, user_id: str, chat_id: int, full_name: str,

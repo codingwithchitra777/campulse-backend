@@ -28,6 +28,16 @@ ocr = [
     "opencv-python-headless",
     "numpy",
 ]
+# Khmer voice-message transcription (Telegram) — torch + Whisper, also heavy
+# and lazily imported; without it the bot replies "not available".
+# Install with:  pip install '.[stt]'
+stt = [
+    "torch",
+    "transformers",
+    "soundfile",
+    "scipy",
+    "numpy",
+]
 
 [tool.uv]
 package = false
